@@ -21,7 +21,9 @@ import {
   Award,
   Briefcase,
   GraduationCap,
-  Scale
+  Scale,
+  Key,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeResume, ATSResult } from './services/geminiService';
@@ -41,7 +43,19 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ATSResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSelectKey = async () => {
+    try {
+      // @ts-ignore
+      await window.aistudio.openSelectKey();
+      setIsQuotaExceeded(false);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to open key selector:', err);
+    }
+  };
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -67,6 +81,7 @@ export default function App() {
 
     setIsAnalyzing(true);
     setError(null);
+    setIsQuotaExceeded(false);
     try {
       let resumeSource: { text?: string; pdfBase64?: string } = {};
       
@@ -80,7 +95,13 @@ export default function App() {
       const data = await analyzeResume(resumeSource, jobDescription);
       setResult(data);
     } catch (err: any) {
-      setError(err.message || 'An error occurred during analysis.');
+      const errorMessage = err.message || '';
+      if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota')) {
+        setIsQuotaExceeded(true);
+        setError('API Quota Exceeded. The free tier has strict limits. Please wait a moment or use your own API key for higher limits.');
+      } else {
+        setError(errorMessage || 'An error occurred during analysis.');
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -119,6 +140,14 @@ export default function App() {
             <span className="flex items-center gap-1.5"><Cpu size={14} /> Tech</span>
             <span className="flex items-center gap-1.5"><Scale size={14} /> Engineering</span>
             <span className="flex items-center gap-1.5"><Calculator size={14} /> Math</span>
+            <button 
+              onClick={handleSelectKey}
+              className="ml-4 p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors flex items-center gap-2 border border-indigo-100"
+              title="Select API Key"
+            >
+              <Key size={16} />
+              <span className="text-xs font-bold">API Key</span>
+            </button>
           </div>
         </div>
       </header>
@@ -255,9 +284,36 @@ export default function App() {
                       )}
                     </button>
                     {error && (
-                      <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm flex items-center gap-2">
-                        <AlertCircle size={16} />
-                        {error}
+                      <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-200 text-sm space-y-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                          <p>{error}</p>
+                        </div>
+                        {isQuotaExceeded && (
+                          <div className="pt-2 border-t border-red-500/20 flex flex-col gap-3">
+                            <p className="text-xs text-red-300/80">
+                              To avoid quota limits, you can use your own Google Cloud project's API key.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={handleSelectKey}
+                                className="px-3 py-1.5 bg-white text-red-600 rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-red-50 transition-colors"
+                              >
+                                <Key size={14} />
+                                Select My Own Key
+                              </button>
+                              <a 
+                                href="https://ai.google.dev/gemini-api/docs/billing" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 bg-red-500/20 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-red-500/30 transition-colors"
+                              >
+                                <ExternalLink size={14} />
+                                Billing Docs
+                              </a>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -137,7 +137,7 @@ export async function analyzeResume(
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
   const genAI = new GoogleGenAI({ apiKey });
-  const model = "gemini-3.1-pro-preview";
+  const model = "gemini-3-flash-preview";
 
   const parts: any[] = [];
 
