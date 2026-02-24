@@ -128,11 +128,11 @@ export default function App() {
       <header className="border-b border-gray-200 bg-white sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+            <div className="w-8 h-8 bg-brand-green rounded-lg flex items-center justify-center text-white">
               <ShieldCheck size={20} />
             </div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900">
-              STEM<span className="text-indigo-600">ATS</span>
+              Auriic<span className="text-brand-gold">ATS</span>
             </h1>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
@@ -142,7 +142,7 @@ export default function App() {
             <span className="flex items-center gap-1.5"><Calculator size={14} /> Math</span>
             <button 
               onClick={handleSelectKey}
-              className="ml-4 p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors flex items-center gap-2 border border-indigo-100"
+              className="ml-4 p-2 hover:bg-brand-green/5 text-brand-green rounded-lg transition-colors flex items-center gap-2 border border-brand-green/20"
               title="Select API Key"
             >
               <Key size={16} />
@@ -167,7 +167,7 @@ export default function App() {
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <FileText className="text-indigo-600" size={20} />
+                      <FileText className="text-brand-green" size={20} />
                       <h2 className="font-semibold text-lg">Resume Content</h2>
                     </div>
                     <div className="flex bg-gray-100 p-1 rounded-lg">
@@ -175,7 +175,7 @@ export default function App() {
                         onClick={() => setResumeMode('text')}
                         className={cn(
                           "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                          resumeMode === 'text' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                          resumeMode === 'text' ? "bg-white text-brand-green shadow-sm" : "text-gray-500 hover:text-gray-700"
                         )}
                       >
                         Text
@@ -184,7 +184,7 @@ export default function App() {
                         onClick={() => setResumeMode('pdf')}
                         className={cn(
                           "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                          resumeMode === 'pdf' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                          resumeMode === 'pdf' ? "bg-white text-brand-green shadow-sm" : "text-gray-500 hover:text-gray-700"
                         )}
                       >
                         PDF
@@ -194,7 +194,7 @@ export default function App() {
 
                   {resumeMode === 'text' ? (
                     <textarea
-                      className="w-full h-64 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-none text-sm font-mono"
+                      className="w-full h-64 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-sm font-mono"
                       placeholder="Paste resume text here..."
                       value={resumeText}
                       onChange={(e) => setResumeText(e.target.value)}
@@ -202,7 +202,7 @@ export default function App() {
                   ) : (
                     <div 
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full h-64 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-4 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer group"
+                      className="w-full h-64 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-4 hover:border-brand-gold hover:bg-brand-gold/5 transition-all cursor-pointer group"
                     >
                       <input 
                         type="file" 
@@ -211,7 +211,7 @@ export default function App() {
                         accept=".pdf" 
                         onChange={handleFileChange}
                       />
-                      <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-16 h-16 bg-brand-gold/10 text-brand-gold rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                         <Upload size={32} />
                       </div>
                       <div className="text-center">
@@ -232,11 +232,11 @@ export default function App() {
 
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
-                    <Briefcase className="text-indigo-600" size={20} />
+                    <Briefcase className="text-brand-green" size={20} />
                     <h2 className="font-semibold text-lg">Job Description (Optional)</h2>
                   </div>
                   <textarea
-                    className="w-full h-48 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-none text-sm font-mono"
+                    className="w-full h-48 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-sm font-mono"
                     placeholder="Paste job description here for weighted matching..."
                     value={jobDescription}
                     onChange={(e) => setJobDescription(e.target.value)}
@@ -246,10 +246,10 @@ export default function App() {
 
               {/* Right Column: Info & Action */}
               <div className="space-y-6">
-                <div className="bg-indigo-900 rounded-2xl p-8 text-white relative overflow-hidden">
+                <div className="bg-brand-green rounded-2xl p-8 text-white relative overflow-hidden">
                   <div className="relative z-10">
-                    <h2 className="text-2xl font-bold mb-4">Enterprise-Grade Analysis</h2>
-                    <p className="text-indigo-100 mb-6 leading-relaxed">
+                    <h2 className="text-2xl font-bold mb-4">Auriic Intelligence</h2>
+                    <p className="text-brand-white/80 mb-6 leading-relaxed">
                       Our system uses strict STEM principles to evaluate candidates. 
                       No score inflation. No bias. Just data-driven evidence.
                     </p>
@@ -260,8 +260,8 @@ export default function App() {
                         'Career progression & role alignment',
                         'US Corporate Compliance verification'
                       ].map((item, i) => (
-                        <li key={i} className="flex items-center gap-2 text-sm text-indigo-200">
-                          <CheckCircle2 size={16} className="text-emerald-400" />
+                        <li key={i} className="flex items-center gap-2 text-sm text-brand-white/70">
+                          <CheckCircle2 size={16} className="text-brand-gold" />
                           {item}
                         </li>
                       ))}
@@ -269,7 +269,7 @@ export default function App() {
                     <button
                       onClick={handleAnalyze}
                       disabled={isAnalyzing}
-                      className="w-full py-4 bg-white text-indigo-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      className="w-full py-4 bg-brand-gold text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                     >
                       {isAnalyzing ? (
                         <>
@@ -278,7 +278,7 @@ export default function App() {
                         </>
                       ) : (
                         <>
-                          Run STEM Analysis
+                          Run Auriic Analysis
                           <ArrowRight size={20} />
                         </>
                       )}
@@ -297,7 +297,7 @@ export default function App() {
                             <div className="flex flex-wrap gap-2">
                               <button
                                 onClick={handleSelectKey}
-                                className="px-3 py-1.5 bg-white text-red-600 rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-red-50 transition-colors"
+                                className="px-3 py-1.5 bg-white text-brand-green rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-brand-green/5 transition-colors"
                               >
                                 <Key size={14} />
                                 Select My Own Key
@@ -306,7 +306,7 @@ export default function App() {
                                 href="https://ai.google.dev/gemini-api/docs/billing" 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="px-3 py-1.5 bg-red-500/20 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-red-500/30 transition-colors"
+                                className="px-3 py-1.5 bg-brand-green/20 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-brand-green/30 transition-colors"
                               >
                                 <ExternalLink size={14} />
                                 Billing Docs
@@ -323,22 +323,22 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-indigo-600 mb-2"><Beaker size={24} /></div>
+                    <div className="text-brand-green mb-2"><Beaker size={24} /></div>
                     <h3 className="font-bold text-sm">Science</h3>
                     <p className="text-xs text-gray-500">Measurable KPIs & evidence-based impact.</p>
                   </div>
                   <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-indigo-600 mb-2"><Cpu size={24} /></div>
+                    <div className="text-brand-green mb-2"><Cpu size={24} /></div>
                     <h3 className="font-bold text-sm">Technology</h3>
                     <p className="text-xs text-gray-500">Hard skill depth & modern stack relevance.</p>
                   </div>
                   <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-indigo-600 mb-2"><Scale size={24} /></div>
+                    <div className="text-brand-green mb-2"><Scale size={24} /></div>
                     <h3 className="font-bold text-sm">Engineering</h3>
                     <p className="text-xs text-gray-500">System design & career progression.</p>
                   </div>
                   <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-indigo-600 mb-2"><Calculator size={24} /></div>
+                    <div className="text-brand-green mb-2"><Calculator size={24} /></div>
                     <h3 className="font-bold text-sm">Mathematics</h3>
                     <p className="text-xs text-gray-500">Weighted scoring & statistical matching.</p>
                   </div>
@@ -362,7 +362,7 @@ export default function App() {
                     <ArrowRight className="rotate-180" size={20} />
                   </button>
                   <div>
-                    <h2 className="font-bold text-lg">Analysis Report</h2>
+                    <h2 className="font-bold text-lg">Auriic Intelligence Report</h2>
                     <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
                       Mode: {result.mode === 'with_jd' ? 'Weighted Match' : 'Independent Evaluation'}
                     </p>
@@ -401,7 +401,7 @@ export default function App() {
                           endAngle={450}
                           dataKey="value"
                         >
-                          <Cell fill="#4F46E5" />
+                          <Cell fill="#027A68" />
                           <Cell fill="#F3F4F6" />
                         </Pie>
                       </PieChart>
@@ -449,13 +449,104 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Advanced Analytics Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="text-brand-green" size={20} />
+                      <h3 className="font-bold">Skill Gap Analysis</h3>
+                    </div>
+                  </div>
+                  <div className="p-6 h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={result.analytics.skill_gap_analysis} layout="vertical">
+                        <XAxis type="number" hide domain={[0, 100]} />
+                        <YAxis 
+                          dataKey="skill" 
+                          type="category" 
+                          width={100} 
+                          tick={{ fontSize: 10, fontWeight: 600 }}
+                        />
+                        <Tooltip 
+                          cursor={{ fill: 'transparent' }}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <div className="bg-gray-900 text-white p-2 rounded text-xs">
+                                  {payload[0].value}% Gap
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar dataKey="gap_score" radius={[0, 4, 4, 0]}>
+                          {result.analytics.skill_gap_analysis.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.gap_score > 50 ? '#C89C36' : '#027A68'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Leadership Potential</h4>
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center font-black text-white",
+                        result.analytics.leadership_potential === 'Exceptional' ? "bg-brand-gold" :
+                        result.analytics.leadership_potential === 'High' ? "bg-brand-green" :
+                        "bg-gray-400"
+                      )}>
+                        {result.analytics.leadership_potential.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="font-bold text-lg">{result.analytics.leadership_potential}</div>
+                        <p className="text-xs text-gray-500">Based on role alignment & history.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Tone Analysis</h4>
+                    <div className="text-sm font-medium text-gray-700 italic">
+                      "{result.analytics.tone_analysis}"
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* More Analytics Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <MetricCard 
+                  icon={<ArrowRight size={20} />}
+                  label="Career Trajectory"
+                  value={`${result.analytics.career_trajectory_score}%`}
+                  description="Growth potential based on progression speed."
+                />
+                <MetricCard 
+                  icon={<Search size={20} />}
+                  label="Industry Relevance"
+                  value={`${result.analytics.industry_relevance_score}%`}
+                  description="Alignment with current market demands."
+                />
+                <MetricCard 
+                  icon={<Cpu size={20} />}
+                  label="Project Impact"
+                  value={`${result.analytics.project_impact_score}%`}
+                  description="Measurable influence of past projects."
+                />
+              </div>
+
               {/* Skills & Compliance */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Skills Analysis */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Cpu className="text-indigo-600" size={20} />
+                      <Cpu className="text-brand-green" size={20} />
                       <h3 className="font-bold">Competency Analysis</h3>
                     </div>
                   </div>
@@ -464,7 +555,7 @@ export default function App() {
                       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Hard Skills Detected</h4>
                       <div className="flex flex-wrap gap-2">
                         {result.hard_skills_found.map((skill, i) => (
-                          <span key={i} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold border border-indigo-100">
+                          <span key={i} className="px-3 py-1 bg-brand-green/10 text-brand-green rounded-lg text-xs font-semibold border border-brand-green/20">
                             {skill}
                           </span>
                         ))}
@@ -526,7 +617,7 @@ export default function App() {
 
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-                      <Beaker className="text-indigo-600" size={20} />
+                      <Beaker className="text-brand-green" size={20} />
                       <h3 className="font-bold">Science: Impact Analysis</h3>
                     </div>
                     <div className="p-6">
@@ -547,18 +638,18 @@ export default function App() {
               </div>
 
               {/* Suggestions */}
-              <div className="bg-indigo-900 rounded-2xl p-8 text-white">
+              <div className="bg-brand-green rounded-2xl p-8 text-white">
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <ChevronRight className="text-indigo-400" />
-                  STEM Optimization Roadmap
+                  <ChevronRight className="text-brand-gold" />
+                  Auriic Optimization Roadmap
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {result.improvement_suggestions.map((suggestion, i) => (
                     <div key={i} className="flex gap-4 p-4 bg-white/5 rounded-xl border border-white/10">
-                      <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0 font-bold text-indigo-300">
+                      <div className="w-8 h-8 rounded-full bg-brand-gold/20 flex items-center justify-center shrink-0 font-bold text-brand-gold">
                         {i + 1}
                       </div>
-                      <p className="text-sm text-indigo-100 leading-relaxed">{suggestion}</p>
+                      <p className="text-sm text-brand-white/90 leading-relaxed">{suggestion}</p>
                     </div>
                   ))}
                 </div>
@@ -571,7 +662,7 @@ export default function App() {
       <footer className="bg-white border-t border-gray-200 py-8 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-xs text-gray-400 font-mono uppercase tracking-widest">
-            STEM-ATS v1.0.0 // Enterprise Compliance Engine // Analytical Mode Active
+            Auriic ATS v1.2.0 // Enterprise Intelligence Engine // Analytical Mode Active
           </p>
         </div>
       </footer>
@@ -581,9 +672,9 @@ export default function App() {
 
 function MetricCard({ icon, label, value, description }: { icon: React.ReactNode, label: string, value: string | number, description: string }) {
   return (
-    <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:border-indigo-200 transition-colors">
+    <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:border-brand-green/20 transition-colors">
       <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+        <div className="p-2 bg-brand-green/5 text-brand-green rounded-lg">
           {icon}
         </div>
         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-widest">{label}</h3>

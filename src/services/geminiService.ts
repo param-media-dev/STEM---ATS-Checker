@@ -105,7 +105,15 @@ Return ONLY valid JSON in this structure:
   "technical_depth_level": "Basic" | "Intermediate" | "Advanced" | "Expert",
   "us_compliance_issues": string[],
   "resume_strength_level": "Weak" | "Moderate" | "Strong" | "Excellent",
-  "improvement_suggestions": string[]
+  "improvement_suggestions": string[],
+  "analytics": {
+    "skill_gap_analysis": { "skill": string, "gap_score": number }[],
+    "career_trajectory_score": number,
+    "tone_analysis": string,
+    "industry_relevance_score": number,
+    "leadership_potential": "Low" | "Medium" | "High" | "Exceptional",
+    "project_impact_score": number
+  }
 }
 
 Be analytical. Be strict. Be evidence-based. Do not include explanations outside JSON.`;
@@ -127,6 +135,14 @@ export interface ATSResult {
   us_compliance_issues: string[];
   resume_strength_level: "Weak" | "Moderate" | "Strong" | "Excellent";
   improvement_suggestions: string[];
+  analytics: {
+    skill_gap_analysis: { skill: string; gap_score: number }[];
+    career_trajectory_score: number;
+    tone_analysis: string;
+    industry_relevance_score: number;
+    leadership_potential: "Low" | "Medium" | "High" | "Exceptional";
+    project_impact_score: number;
+  };
 }
 
 export async function analyzeResume(
