@@ -1,0 +1,7 @@
+{
+  "name": "STEM-ATS: Enterprise Resume Analyzer",
+  "description": "A strict, evidence-based Applicant Tracking System using STEM principles to evaluate resumes against job descriptions with US corporate compliance checks.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
