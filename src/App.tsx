@@ -25,7 +25,11 @@ import {
   Key,
   ExternalLink,
   Users,
-  BookOpen
+  BookOpen,
+  Plus,
+  Trash2,
+  ChevronLeft,
+  LayoutDashboard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeResume, ATSResult } from './services/geminiService';
@@ -41,9 +45,11 @@ export default function App() {
   const [resumeText, setResumeText] = useState('');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeMode, setResumeMode] = useState<'text' | 'pdf'>('text');
-  const [jobDescription, setJobDescription] = useState('');
+  const [jobDescriptions, setJobDescriptions] = useState<string[]>(['']);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<ATSResult | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
+  const [results, setResults] = useState<ATSResult[]>([]);
+  const [selectedResultIndex, setSelectedResultIndex] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,9 +87,17 @@ export default function App() {
       return;
     }
 
+    const activeJDs = jobDescriptions.filter(jd => jd.trim() !== '');
+    if (activeJDs.length === 0) {
+      setError('Please provide at least one job description.');
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
     setIsQuotaExceeded(false);
+    setAnalysisProgress({ current: 0, total: activeJDs.length });
+    
     try {
       let resumeSource: { text?: string; pdfBase64?: string } = {};
       
@@ -94,8 +108,15 @@ export default function App() {
         resumeSource = { text: resumeText };
       }
 
-      const data = await analyzeResume(resumeSource, jobDescription);
-      setResult(data);
+      const allResults: ATSResult[] = [];
+      for (let i = 0; i < activeJDs.length; i++) {
+        setAnalysisProgress(prev => ({ ...prev, current: i + 1 }));
+        const data = await analyzeResume(resumeSource, activeJDs[i]);
+        allResults.push(data);
+      }
+      
+      setResults(allResults);
+      setSelectedResultIndex(0);
     } catch (err: any) {
       const errorMessage = err.message || '';
       if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota')) {
@@ -110,8 +131,26 @@ export default function App() {
   };
 
   const reset = () => {
-    setResult(null);
+    setResults([]);
     setError(null);
+  };
+
+  const addJD = () => {
+    setJobDescriptions([...jobDescriptions, '']);
+  };
+
+  const removeJD = (index: number) => {
+    if (jobDescriptions.length > 1) {
+      const newJDs = [...jobDescriptions];
+      newJDs.splice(index, 1);
+      setJobDescriptions(newJDs);
+    }
+  };
+
+  const updateJD = (index: number, value: string) => {
+    const newJDs = [...jobDescriptions];
+    newJDs[index] = value;
+    setJobDescriptions(newJDs);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,7 +195,7 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
-          {!result ? (
+          {results.length === 0 ? (
             <motion.div
               key="input-stage"
               initial={{ opacity: 0, y: 20 }}
@@ -233,16 +272,46 @@ export default function App() {
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Briefcase className="text-brand-green" size={20} />
-                    <h2 className="font-semibold text-lg">Job Description (Optional)</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="text-brand-green" size={20} />
+                      <h2 className="font-semibold text-lg">Job Descriptions</h2>
+                    </div>
+                    <button 
+                      onClick={addJD}
+                      className="p-1.5 bg-brand-green/10 text-brand-green rounded-lg hover:bg-brand-green/20 transition-colors flex items-center gap-1 text-xs font-bold"
+                    >
+                      <Plus size={14} /> Add JD
+                    </button>
                   </div>
-                  <textarea
-                    className="w-full h-48 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-sm font-mono"
-                    placeholder="Paste job description here for weighted matching..."
-                    value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
-                  />
+                  
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                    {jobDescriptions.map((jd, index) => (
+                      <div key={index} className="relative group">
+                        <div className="absolute -left-3 top-4 w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-400 border border-gray-200">
+                          {index + 1}
+                        </div>
+                        <textarea
+                          className="w-full h-32 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-sm font-mono"
+                          placeholder={`Paste job description #${index + 1} here...`}
+                          value={jd}
+                          onChange={(e) => updateJD(index, e.target.value)}
+                        />
+                        {jobDescriptions.length > 1 && (
+                          <button 
+                            onClick={() => removeJD(index)}
+                            className="absolute top-2 right-2 p-1.5 bg-white/80 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm border border-red-100"
+                            title="Remove this JD"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-[10px] text-gray-400 italic">
+                    You can add multiple job descriptions to compare your resume against different roles simultaneously.
+                  </p>
                 </div>
               </div>
 
@@ -276,7 +345,7 @@ export default function App() {
                       {isAnalyzing ? (
                         <>
                           <Loader2 className="animate-spin" size={20} />
-                          Analyzing STEM Data...
+                          Analyzing {analysisProgress.current}/{analysisProgress.total} JDs...
                         </>
                       ) : (
                         <>
@@ -354,109 +423,150 @@ export default function App() {
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-8 pb-20"
             >
-              {/* Results Top Bar */}
-              <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-4">
+              {/* Results Navigation Bar */}
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Back Button & Title */}
+                <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex-1">
                   <button 
                     onClick={reset}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
                   >
-                    <ArrowRight className="rotate-180" size={20} />
+                    <ChevronLeft size={20} />
                   </button>
                   <div>
                     <h2 className="font-bold text-lg">Auriic Intelligence Report</h2>
-                    <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
-                      Mode: {result.mode === 'with_jd' ? 'Weighted Match' : 'Independent Evaluation'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <div className={cn(
-                    "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-tighter",
-                    result.resume_strength_level === 'Excellent' ? "bg-emerald-100 text-emerald-700" :
-                    result.resume_strength_level === 'Strong' ? "bg-blue-100 text-blue-700" :
-                    result.resume_strength_level === 'Moderate' ? "bg-amber-100 text-amber-700" :
-                    "bg-red-100 text-red-700"
-                  )}>
-                    {result.resume_strength_level}
-                  </div>
-                </div>
-              </div>
-
-              {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Score Card */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
-                  <div className="absolute top-4 left-4 text-gray-300"><Calculator size={40} /></div>
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">ATS Readiness Score</h3>
-                  {result.mode === 'with_jd' && (
-                    <div className="absolute top-4 right-4 bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border border-brand-gold/20">
-                      Role Weighted
-                    </div>
-                  )}
-                  <div className="relative w-48 h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { value: result.ats_score },
-                            { value: 100 - result.ats_score }
-                          ]}
-                          innerRadius={60}
-                          outerRadius={80}
-                          startAngle={90}
-                          endAngle={450}
-                          dataKey="value"
-                        >
-                          <Cell fill="#027A68" />
-                          <Cell fill="#F3F4F6" />
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-5xl font-black text-gray-900">{result.ats_score}</span>
-                      <span className="text-xs font-bold text-gray-400">/ 100</span>
-                    </div>
-                  </div>
-                  <div className="mt-6 text-center">
-                    <p className="text-sm text-gray-600 font-medium">
-                      {result.ats_score >= 80 ? 'Highly Competitive' : 
-                       result.ats_score >= 60 ? 'Moderately Competitive' : 
-                       'Requires Optimization'}
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                      {results.length} Job Descriptions Analyzed
                     </p>
                   </div>
                 </div>
 
-                {/* Key Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <MetricCard 
-                    icon={<BarChart3 size={20} />}
-                    label="Keyword Match"
-                    value={result.keyword_match_percentage ? `${result.keyword_match_percentage}%` : 'N/A'}
-                    description="Relevance to industry standards & JD keywords."
-                  />
-                  <MetricCard 
-                    icon={<Award size={20} />}
-                    label="Technical Depth"
-                    value={result.technical_depth_level}
-                    description="Evaluation of technical stack complexity."
-                  />
-                  <MetricCard 
-                    icon={<Briefcase size={20} />}
-                    label="Experience"
-                    value={`${result.experience_years_detected} Years`}
-                    description={`Career Level: ${result.career_progression_level}`}
-                  />
-                  <MetricCard 
-                    icon={<GraduationCap size={20} />}
-                    label="Education"
-                    value={result.education_level_detected}
-                    description={result.education_match ? "Matches requirements" : "Review needed"}
-                  />
+                {/* JD Selector */}
+                <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-gray-200 shadow-sm overflow-x-auto no-scrollbar max-w-full md:max-w-[60%]">
+                  {results.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedResultIndex(idx)}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2",
+                        selectedResultIndex === idx 
+                          ? "bg-brand-green text-white shadow-md" 
+                          : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                      )}
+                    >
+                      <LayoutDashboard size={14} />
+                      JD #{idx + 1}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Recruiter Simulation Engine */}
+              {(() => {
+                const result = results[selectedResultIndex];
+                if (!result) return null;
+                
+                return (
+                  <div className="space-y-8">
+                    {/* Results Top Bar */}
+                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-brand-green/10 rounded-lg flex items-center justify-center text-brand-green">
+                          <Search size={20} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900">Analysis for Job Description #{selectedResultIndex + 1}</h3>
+                          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
+                            Mode: {result.mode === 'with_jd' ? 'Weighted Match' : 'Independent Evaluation'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className={cn(
+                          "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-tighter",
+                          result.resume_strength_level === 'Excellent' ? "bg-emerald-100 text-emerald-700" :
+                          result.resume_strength_level === 'Strong' ? "bg-blue-100 text-blue-700" :
+                          result.resume_strength_level === 'Moderate' ? "bg-amber-100 text-amber-700" :
+                          "bg-red-100 text-red-700"
+                        )}>
+                          {result.resume_strength_level}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Main Dashboard Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Score Card */}
+                      <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
+                        <div className="absolute top-4 left-4 text-gray-300"><Calculator size={40} /></div>
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">ATS Readiness Score</h3>
+                        {result.mode === 'with_jd' && (
+                          <div className="absolute top-4 right-4 bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border border-brand-gold/20">
+                            Role Weighted
+                          </div>
+                        )}
+                        <div className="relative w-48 h-48">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={[
+                                  { value: result.ats_score },
+                                  { value: 100 - result.ats_score }
+                                ]}
+                                innerRadius={60}
+                                outerRadius={80}
+                                startAngle={90}
+                                endAngle={450}
+                                dataKey="value"
+                              >
+                                <Cell fill="#027A68" />
+                                <Cell fill="#F3F4F6" />
+                              </Pie>
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-5xl font-black text-gray-900">{result.ats_score}</span>
+                            <span className="text-xs font-bold text-gray-400">/ 100</span>
+                          </div>
+                        </div>
+                        <div className="mt-6 text-center">
+                          <p className="text-sm text-gray-600 font-medium">
+                            {result.ats_score >= 80 ? 'Highly Competitive' : 
+                             result.ats_score >= 60 ? 'Moderately Competitive' : 
+                             'Requires Optimization'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Key Metrics */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <MetricCard 
+                          icon={<BarChart3 size={20} />}
+                          label="Keyword Match"
+                          value={result.keyword_match_percentage ? `${result.keyword_match_percentage}%` : 'N/A'}
+                          description="Relevance to industry standards & JD keywords."
+                        />
+                        <MetricCard 
+                          icon={<Award size={20} />}
+                          label="Technical Depth"
+                          value={result.technical_depth_level}
+                          description="Evaluation of technical stack complexity."
+                        />
+                        <MetricCard 
+                          icon={<Briefcase size={20} />}
+                          label="Experience"
+                          value={`${result.experience_years_detected} Years`}
+                          description={`Career Level: ${result.career_progression_level}`}
+                        />
+                        <MetricCard 
+                          icon={<GraduationCap size={20} />}
+                          label="Education"
+                          value={result.education_level_detected}
+                          description={result.education_match ? "Matches requirements" : "Review needed"}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Recruiter Simulation Engine */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100 bg-gray-50/50">
                   <div className="flex items-center gap-2">
@@ -794,24 +904,27 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Suggestions */}
-              <div className="bg-brand-green rounded-2xl p-8 text-white">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <ChevronRight className="text-brand-gold" />
-                  Auriic Optimization Roadmap
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {result.improvement_suggestions.map((suggestion, i) => (
-                    <div key={i} className="flex gap-4 p-4 bg-white/5 rounded-xl border border-white/10">
-                      <div className="w-8 h-8 rounded-full bg-brand-gold/20 flex items-center justify-center shrink-0 font-bold text-brand-gold">
-                        {i + 1}
+                {/* Suggestions */}
+                <div className="bg-brand-green rounded-2xl p-8 text-white">
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <ChevronRight className="text-brand-gold" />
+                    Auriic Optimization Roadmap
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {result.improvement_suggestions.map((suggestion, i) => (
+                      <div key={i} className="flex gap-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                        <div className="w-8 h-8 rounded-full bg-brand-gold/20 flex items-center justify-center shrink-0 font-bold text-brand-gold">
+                          {i + 1}
+                        </div>
+                        <p className="text-sm text-brand-white/90 leading-relaxed">{suggestion}</p>
                       </div>
-                      <p className="text-sm text-brand-white/90 leading-relaxed">{suggestion}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </motion.div>
+            );
+          })()}
+        </motion.div>
           )}
         </AnimatePresence>
       </main>
