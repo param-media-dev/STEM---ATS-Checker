@@ -93,6 +93,8 @@ Return ONLY valid JSON in this structure:
   "mode": "with_jd" | "without_jd",
   "ats_score": number,
   "keyword_match_percentage": number | null,
+  "jd_skills": string[],
+  "matched_skills": string[],
   "hard_skills_found": string[],
   "soft_skills_found": string[],
   "missing_critical_skills": string[],
@@ -112,7 +114,14 @@ Return ONLY valid JSON in this structure:
     "tone_analysis": string,
     "industry_relevance_score": number,
     "leadership_potential": "Low" | "Medium" | "High" | "Exceptional",
-    "project_impact_score": number
+    "project_impact_score": number,
+    "recruiter_simulation": {
+      "first_impression": string,
+      "red_flags": string[],
+      "green_flags": string[],
+      "perceived_seniority": string
+    },
+    "skill_gap_learning_path": { "skill": string, "resource_type": string, "topic": string }[]
   }
 }
 
@@ -122,6 +131,8 @@ export interface ATSResult {
   mode: "with_jd" | "without_jd";
   ats_score: number;
   keyword_match_percentage: number | null;
+  jd_skills: string[];
+  matched_skills: string[];
   hard_skills_found: string[];
   soft_skills_found: string[];
   missing_critical_skills: string[];
@@ -142,6 +153,13 @@ export interface ATSResult {
     industry_relevance_score: number;
     leadership_potential: "Low" | "Medium" | "High" | "Exceptional";
     project_impact_score: number;
+    recruiter_simulation: {
+      first_impression: string;
+      red_flags: string[];
+      green_flags: string[];
+      perceived_seniority: string;
+    };
+    skill_gap_learning_path: { skill: string; resource_type: string; topic: string }[];
   };
 }
 
@@ -191,6 +209,8 @@ export async function analyzeResume(
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
+      temperature: 0,
+      seed: 42,
     },
   });
 

@@ -23,7 +23,11 @@ import {
   GraduationCap,
   Scale,
   Key,
-  ExternalLink
+  ExternalLink,
+  Target,
+  Users,
+  BookOpen,
+  Linkedin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeResume, ATSResult } from './services/geminiService';
@@ -382,11 +386,16 @@ export default function App() {
               </div>
 
               {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Score Card */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
                   <div className="absolute top-4 left-4 text-gray-300"><Calculator size={40} /></div>
                   <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">ATS Readiness Score</h3>
+                  {result.mode === 'with_jd' && (
+                    <div className="absolute top-4 right-4 bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border border-brand-gold/20">
+                      Role Weighted
+                    </div>
+                  )}
                   <div className="relative w-48 h-48">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -421,7 +430,7 @@ export default function App() {
                 </div>
 
                 {/* Key Metrics */}
-                <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <MetricCard 
                     icon={<BarChart3 size={20} />}
                     label="Keyword Match"
@@ -446,6 +455,86 @@ export default function App() {
                     value={result.education_level_detected}
                     description={result.education_match ? "Matches requirements" : "Review needed"}
                   />
+                </div>
+              </div>
+
+              {/* Recruiter Simulation Engine */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                  <div className="flex items-center gap-2">
+                    <Users className="text-brand-green" size={20} />
+                    <h3 className="font-bold">Recruiter Simulation Engine</h3>
+                    <span className="ml-auto text-[10px] font-bold bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded uppercase">AI Persona Active</span>
+                  </div>
+                </div>
+                <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-1 space-y-6">
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">First Impression</h4>
+                      <p className="text-sm text-gray-700 font-medium italic leading-relaxed">
+                        "{result.analytics.recruiter_simulation.first_impression}"
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Perceived Seniority</h4>
+                      <div className="inline-flex items-center px-3 py-1 bg-brand-green text-white rounded-full text-xs font-bold">
+                        {result.analytics.recruiter_simulation.perceived_seniority}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl">
+                      <h4 className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <CheckCircle2 size={14} /> Green Flags
+                      </h4>
+                      <ul className="space-y-2">
+                        {result.analytics.recruiter_simulation.green_flags.map((flag, i) => (
+                          <li key={i} className="text-xs text-emerald-800 flex items-start gap-2">
+                            <span className="mt-1 w-1 h-1 bg-emerald-400 rounded-full shrink-0" />
+                            {flag}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-red-50/50 border border-red-100 p-4 rounded-xl">
+                      <h4 className="text-xs font-bold text-red-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <AlertCircle size={14} /> Red Flags
+                      </h4>
+                      <ul className="space-y-2">
+                        {result.analytics.recruiter_simulation.red_flags.map((flag, i) => (
+                          <li key={i} className="text-xs text-red-800 flex items-start gap-2">
+                            <span className="mt-1 w-1 h-1 bg-red-400 rounded-full shrink-0" />
+                            {flag}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Skill Gap Learning Path */}
+              <div className="grid grid-cols-1 gap-8">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-gray-100 flex items-center gap-2">
+                    <GraduationCap className="text-brand-green" size={20} />
+                    <h3 className="font-bold">Skill Gap Learning Path</h3>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    {result.analytics.skill_gap_learning_path.map((item, i) => (
+                      <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-brand-gold/30 transition-colors">
+                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-brand-gold shadow-sm shrink-0">
+                          <BookOpen size={20} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-brand-green uppercase tracking-wider">{item.skill}</p>
+                          <p className="text-sm font-bold text-gray-900">{item.topic}</p>
+                          <p className="text-[10px] text-gray-500 font-medium">Recommended: {item.resource_type}</p>
+                        </div>
+                        <ArrowRight className="ml-auto text-gray-300" size={16} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -539,6 +628,76 @@ export default function App() {
                   description="Measurable influence of past projects."
                 />
               </div>
+
+              {/* JD Matching Intelligence */}
+              {result.mode === 'with_jd' && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-gray-100 flex items-center gap-2">
+                    <Target className="text-brand-green" size={20} />
+                    <h3 className="font-bold">JD Matching Intelligence</h3>
+                  </div>
+                  <div className="p-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      {/* Skills in JD */}
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                          <Search size={14} /> Required in JD
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {result.jd_skills?.length > 0 ? (
+                            result.jd_skills.map((skill, i) => (
+                              <span key={i} className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-semibold border border-gray-200">
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <p className="text-xs text-gray-400 italic">No specific skills extracted from JD.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Matched Skills */}
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-brand-green uppercase tracking-widest flex items-center gap-2">
+                          <CheckCircle2 size={14} /> Matched in Resume
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {result.matched_skills.length > 0 ? (
+                            result.matched_skills.map((skill, i) => (
+                              <span key={i} className="px-2.5 py-1 bg-brand-green text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-sm">
+                                <CheckCircle2 size={12} />
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <p className="text-xs text-gray-400 italic">No direct skill matches detected.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Match Analysis */}
+                      <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 flex flex-col justify-center">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Match Analysis</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-end gap-2">
+                            <span className="text-3xl font-black text-brand-green">{result.matched_skills.length}</span>
+                            <span className="text-sm text-gray-500 font-bold mb-1">/ {result.jd_skills?.length || 0} Skills Matched</span>
+                          </div>
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            Your resume covers <span className="font-bold">{Math.round((result.matched_skills.length / (result.jd_skills?.length || 1)) * 100)}%</span> of the required technical competencies identified in the Job Description.
+                          </p>
+                          {result.missing_critical_skills.length > 0 && (
+                            <div className="pt-3 border-t border-gray-200">
+                              <p className="text-[10px] font-bold text-red-500 uppercase tracking-tighter mb-1">Critical Gaps</p>
+                              <p className="text-[10px] text-gray-500">{result.missing_critical_skills.slice(0, 3).join(', ')}{result.missing_critical_skills.length > 3 ? '...' : ''}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Skills & Compliance */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

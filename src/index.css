@@ -7,12 +7,45 @@
   
   --color-brand-green: #027A68;
   --color-brand-gold: #C89C36;
-  --color-brand-white: #FFFFFF;
+  --color-brand-white: #F9FBFA;
 }
 
 @layer base {
   body {
-    @apply antialiased;
+    @apply bg-[#F0F4F3] text-[#1A1A1A] antialiased;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full border-2 border-transparent bg-clip-padding hover:bg-brand-green/40 transition-colors;
+  }
+
+  /* Focus States */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-green ring-offset-2;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-brand-white/80 backdrop-blur-md border border-brand-white/20;
+  }
+  
+  .bento-card {
+    @apply bg-brand-white rounded-3xl border border-gray-200/60 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.07)] hover:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.1)] transition-all duration-300;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-green to-brand-gold;
   }
 }
 
