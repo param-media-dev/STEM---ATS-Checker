@@ -115,13 +115,19 @@ Return ONLY valid JSON in this structure:
     "industry_relevance_score": number,
     "leadership_potential": "Low" | "Medium" | "High" | "Exceptional",
     "project_impact_score": number,
+    "interview_probability_score": number,
     "recruiter_simulation": {
       "first_impression": string,
       "red_flags": string[],
       "green_flags": string[],
       "perceived_seniority": string
     },
-    "skill_gap_learning_path": { "skill": string, "resource_type": string, "topic": string }[]
+    "skill_gap_learning_path": { "skill": string, "resource_type": string, "topic": string }[],
+    "linkedin_optimization": {
+      "headline_suggestion": string,
+      "about_section_tips": string[],
+      "experience_formatting": string
+    }
   }
 }
 
@@ -153,6 +159,7 @@ export interface ATSResult {
     industry_relevance_score: number;
     leadership_potential: "Low" | "Medium" | "High" | "Exceptional";
     project_impact_score: number;
+    interview_probability_score: number;
     recruiter_simulation: {
       first_impression: string;
       red_flags: string[];
@@ -160,6 +167,11 @@ export interface ATSResult {
       perceived_seniority: string;
     };
     skill_gap_learning_path: { skill: string; resource_type: string; topic: string }[];
+    linkedin_optimization: {
+      headline_suggestion: string;
+      about_section_tips: string[];
+      experience_formatting: string;
+    };
   };
 }
 
@@ -168,9 +180,7 @@ export async function analyzeResume(
   jobDescription?: string
 ): Promise<ATSResult> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    throw new Error("GEMINI_API_KEY is missing or invalid. If running locally, please create a .env file and set GEMINI_API_KEY to your actual Google AI Studio API key.");
-  }
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
   const genAI = new GoogleGenAI({ apiKey });
   const model = "gemini-3-flash-preview";
@@ -211,8 +221,6 @@ export async function analyzeResume(
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
-      temperature: 0,
-      seed: 42,
     },
   });
 

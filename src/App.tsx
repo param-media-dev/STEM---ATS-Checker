@@ -386,7 +386,43 @@ export default function App() {
               </div>
 
               {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Interview Probability Score */}
+                <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
+                  <div className="absolute top-4 left-4 text-gray-300"><Target size={40} /></div>
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 text-center">Interview Probability</h3>
+                  <div className="relative w-48 h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { value: result.analytics.interview_probability_score },
+                            { value: 100 - result.analytics.interview_probability_score }
+                          ]}
+                          innerRadius={60}
+                          outerRadius={80}
+                          startAngle={90}
+                          endAngle={450}
+                          dataKey="value"
+                        >
+                          <Cell fill="#C89C36" />
+                          <Cell fill="#F3F4F6" />
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-5xl font-black text-gray-900">{result.analytics.interview_probability_score}%</span>
+                    </div>
+                  </div>
+                  <div className="mt-6 text-center">
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">
+                      {result.analytics.interview_probability_score >= 75 ? 'High Conversion Potential' : 
+                       result.analytics.interview_probability_score >= 40 ? 'Moderate Shortlist Chance' : 
+                       'Low Visibility Risk'}
+                    </p>
+                  </div>
+                </div>
+
                 {/* Score Card */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
                   <div className="absolute top-4 left-4 text-gray-300"><Calculator size={40} /></div>
@@ -513,8 +549,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Skill Gap Learning Path */}
-              <div className="grid grid-cols-1 gap-8">
+              {/* Skill Gap Learning Path & LinkedIn Optimizer */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-gray-100 flex items-center gap-2">
                     <GraduationCap className="text-brand-green" size={20} />
@@ -534,6 +570,38 @@ export default function App() {
                         <ArrowRight className="ml-auto text-gray-300" size={16} />
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-gray-100 flex items-center gap-2">
+                    <Linkedin className="text-brand-green" size={20} />
+                    <h3 className="font-bold">LinkedIn Profile Optimizer</h3>
+                  </div>
+                  <div className="p-6 space-y-6">
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Headline Suggestion</h4>
+                      <div className="p-4 bg-brand-green/5 border border-brand-green/10 rounded-xl text-sm font-bold text-brand-green leading-relaxed">
+                        "{result.analytics.linkedin_optimization.headline_suggestion}"
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">About Section Tips</h4>
+                      <ul className="space-y-2">
+                        {result.analytics.linkedin_optimization.about_section_tips.map((tip, i) => (
+                          <li key={i} className="text-xs text-gray-600 flex items-start gap-2">
+                            <span className="mt-1.5 w-1 h-1 bg-brand-gold rounded-full shrink-0" />
+                            {tip}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="pt-4 border-t border-gray-100">
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Experience Formatting</h4>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        {result.analytics.linkedin_optimization.experience_formatting}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
