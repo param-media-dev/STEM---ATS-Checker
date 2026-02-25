@@ -108,6 +108,8 @@ Return ONLY valid JSON in this structure:
   "mode": "with_jd" | "without_jd",
   "ats_score": number,
   "keyword_match_percentage": number | null,
+  "jd_skills": string[],
+  "matched_skills": string[],
   "hard_skills_found": string[],
   "soft_skills_found": string[],
   "missing_critical_skills": string[],
@@ -127,9 +129,23 @@ Return ONLY valid JSON in this structure:
     "tone_analysis": string,
     "industry_relevance_score": number,
     "leadership_potential": "Low" | "Medium" | "High" | "Exceptional",
-    "project_impact_score": number
+    "project_impact_score": number,
+    "recruiter_simulation": {
+      "first_impression": string,
+      "red_flags": string[],
+      "green_flags": string[],
+      "perceived_seniority": string
+    },
+    "skill_gap_learning_path": { "skill": string, "resource_type": string, "topic": string }[]
   }
 }
+
+CRITICAL RULES FOR SKILL MATCHING:
+1. "jd_skills": Extract ONLY unique technical skills from the Job Description.
+2. "matched_skills": This MUST be a STRICT SUBSET of "jd_skills". Only include skills from "jd_skills" that are also found in the Resume.
+3. "hard_skills_found": List ALL technical skills found in the Resume (including those not in the JD).
+4. The count of "matched_skills" can NEVER exceed the count of "jd_skills".
+5. "missing_critical_skills": List skills from "jd_skills" that are NOT in the Resume.
 
 Be analytical. Be strict. Be evidence-based. Do not include explanations outside JSON.`;
 

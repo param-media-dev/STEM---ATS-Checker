@@ -125,6 +125,13 @@ Return ONLY valid JSON in this structure:
   }
 }
 
+CRITICAL RULES FOR SKILL MATCHING:
+1. "jd_skills": Extract ONLY unique technical skills from the Job Description.
+2. "matched_skills": This MUST be a STRICT SUBSET of "jd_skills". Only include skills from "jd_skills" that are also found in the Resume.
+3. "hard_skills_found": List ALL technical skills found in the Resume (including those not in the JD).
+4. The count of "matched_skills" can NEVER exceed the count of "jd_skills".
+5. "missing_critical_skills": List skills from "jd_skills" that are NOT in the Resume.
+
 Be analytical. Be strict. Be evidence-based. Do not include explanations outside JSON.`;
 
 export interface ATSResult {
