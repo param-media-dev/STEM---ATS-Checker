@@ -1,6 +1,5 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import mongoose from "mongoose";
 import multer from "multer";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
@@ -14,36 +13,6 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
-
-// MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI;
-if (MONGODB_URI) {
-  mongoose.connect(MONGODB_URI, {
-    serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-  })
-    .then(() => console.log("Connected to MongoDB Atlas"))
-    .catch((err) => {
-      console.error("MongoDB connection error:", err.message);
-      if (err.message.includes("authentication failed")) {
-        console.error("TIP: If your password contains special characters like '@', ensure they are URL-encoded (e.g., '@' becomes '%40').");
-      }
-    });
-} else {
-  console.warn("MONGODB_URI not set. Database features will be disabled.");
-}
-
-// Schema
-const ResumeSchema = new mongoose.Schema({
-  hash: { type: String, required: true, unique: true },
-  score: { type: Number, required: true },
-  result: { type: Object, required: true },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const ResumeModel = mongoose.model("Resume", ResumeSchema);
-
-// Helper to check DB status
-const isDbConnected = () => mongoose.connection.readyState === 1;
 
 // Gemini Setup
 const SYSTEM_INSTRUCTION = `You are an enterprise-level Applicant Tracking System (ATS) designed using official STEM principles:
@@ -191,17 +160,6 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
     // We use the raw text for hashing to be consistent
     const hash = crypto.SHA256(resumeContent).toString();
 
-    // Check if already scored
-    if (MONGODB_URI && isDbConnected()) {
-      const existing = await ResumeModel.findOne({ hash });
-      if (existing) {
-        console.log("Returning existing score from DB");
-        return res.json(existing.result);
-      }
-    } else if (MONGODB_URI && !isDbConnected()) {
-      console.warn("Database is not connected. Skipping cache check.");
-    }
-
     // Call Gemini
     const userApiKey = req.body.userApiKey;
     const apiKey = userApiKey || process.env.GEMINI_API_KEY;
@@ -251,20 +209,6 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
     if (!resultText) throw new Error("No response from AI");
 
     const result = JSON.parse(resultText);
-
-    // Store in DB
-    if (MONGODB_URI && isDbConnected()) {
-      try {
-        await ResumeModel.create({
-          hash,
-          score: result.ats_score,
-          result: result
-        });
-        console.log("Stored new score in DB");
-      } catch (dbErr) {
-        console.error("Failed to store in DB:", dbErr);
-      }
-    }
 
     res.json(result);
   } catch (err: any) {

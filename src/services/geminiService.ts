@@ -168,7 +168,9 @@ export async function analyzeResume(
   jobDescription?: string
 ): Promise<ATSResult> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    throw new Error("GEMINI_API_KEY is missing or invalid. If running locally, please create a .env file and set GEMINI_API_KEY to your actual Google AI Studio API key.");
+  }
 
   const genAI = new GoogleGenAI({ apiKey });
   const model = "gemini-3-flash-preview";
