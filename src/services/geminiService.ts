@@ -108,6 +108,7 @@ Return ONLY valid JSON in this structure:
   "us_compliance_issues": string[],
   "resume_strength_level": "Weak" | "Moderate" | "Strong" | "Excellent",
   "improvement_suggestions": string[],
+  "requires_us_clearance_or_citizenship": boolean,
   "analytics": {
     "skill_gap_analysis": { "skill": string, "gap_score": number }[],
     "career_trajectory_score": number,
@@ -130,7 +131,11 @@ CRITICAL RULES FOR SKILL MATCHING:
 2. "matched_skills": This MUST be a STRICT SUBSET of "jd_skills". Only include skills from "jd_skills" that are also found in the Resume.
 3. "hard_skills_found": List ALL technical skills found in the Resume (including those not in the JD).
 4. The count of "matched_skills" can NEVER exceed the count of "jd_skills".
-5. "missing_critical_skills": List skills from "jd_skills" that are NOT in the Resume.
+6. "requires_us_clearance_or_citizenship": Set to true if the Job Description explicitly mentions requirements for:
+   - US Citizenship (USC)
+   - Green Card (GC)
+   - Security Clearances (Top Secret, Secret, Confidential, DOD, Public Trust)
+   Otherwise, set to false.
 
 Be analytical. Be strict. Be evidence-based. Do not include explanations outside JSON.`;
 
@@ -153,6 +158,7 @@ export interface ATSResult {
   us_compliance_issues: string[];
   resume_strength_level: "Weak" | "Moderate" | "Strong" | "Excellent";
   improvement_suggestions: string[];
+  requires_us_clearance_or_citizenship: boolean;
   analytics: {
     skill_gap_analysis: { skill: string; gap_score: number }[];
     career_trajectory_score: number;

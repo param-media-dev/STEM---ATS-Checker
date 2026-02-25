@@ -443,19 +443,20 @@ export default function App() {
 
                 {/* JD Selector */}
                 <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-gray-200 shadow-sm overflow-x-auto no-scrollbar max-w-full md:max-w-[60%]">
-                  {results.map((_, idx) => (
+                  {results.map((res, idx) => (
                     <button
                       key={idx}
                       onClick={() => setSelectedResultIndex(idx)}
                       className={cn(
-                        "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2",
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border",
                         selectedResultIndex === idx 
-                          ? "bg-brand-green text-white shadow-md" 
-                          : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                          ? (res.requires_us_clearance_or_citizenship ? "bg-red-600 text-white border-red-700 shadow-md scale-105" : "bg-brand-green text-white border-brand-green shadow-md")
+                          : (res.requires_us_clearance_or_citizenship ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" : "bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100")
                       )}
                     >
                       <LayoutDashboard size={14} />
                       JD #{idx + 1}
+                      {res.requires_us_clearance_or_citizenship && <ShieldCheck size={12} className="ml-1" />}
                     </button>
                   ))}
                 </div>
@@ -467,14 +468,55 @@ export default function App() {
                 
                 return (
                   <div className="space-y-8">
+                    {/* Restricted Access Warning Banner */}
+                    {result.requires_us_clearance_or_citizenship && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-red-600 text-white p-6 rounded-2xl shadow-lg border-2 border-red-700 flex flex-col md:flex-row items-center gap-6"
+                      >
+                        <div className="bg-white/20 p-4 rounded-full">
+                          <ShieldCheck size={48} className="text-white" />
+                        </div>
+                        <div className="text-center md:text-left">
+                          <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter mb-3 leading-none">
+                            Restricted Role Detected
+                          </h2>
+                          <p className="text-base md:text-xl font-bold text-red-50 opacity-95 leading-tight max-w-2xl">
+                            This position explicitly requires <span className="bg-white text-red-600 px-1 rounded">US Citizenship (USC)</span>, 
+                            <span className="bg-white text-red-600 px-1 rounded"> Green Card (GC)</span>, or specific 
+                            <span className="bg-white text-red-600 px-1 rounded"> Security Clearances</span>.
+                          </p>
+                        </div>
+                        <motion.div 
+                          animate={{ scale: [1, 1.05, 1] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="shrink-0 bg-white text-red-600 px-6 py-3 rounded-xl font-black text-lg uppercase tracking-widest shadow-inner"
+                        >
+                          Action Required
+                        </motion.div>
+                      </motion.div>
+                    )}
+
                     {/* Results Top Bar */}
-                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+                    <div className={cn(
+                      "flex items-center justify-between bg-white p-4 rounded-2xl border shadow-sm transition-colors",
+                      result.requires_us_clearance_or_citizenship ? "border-red-200 bg-red-50/30" : "border-gray-200"
+                    )}>
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-brand-green/10 rounded-lg flex items-center justify-center text-brand-green">
-                          <Search size={20} />
+                        <div className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                          result.requires_us_clearance_or_citizenship ? "bg-red-100 text-red-600" : "bg-brand-green/10 text-brand-green"
+                        )}>
+                          {result.requires_us_clearance_or_citizenship ? <ShieldCheck size={20} /> : <Search size={20} />}
                         </div>
                         <div>
-                          <h3 className="font-bold text-gray-900">Analysis for Job Description #{selectedResultIndex + 1}</h3>
+                          <h3 className={cn(
+                            "font-bold text-lg",
+                            result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900"
+                          )}>
+                            Analysis for Job Description #{selectedResultIndex + 1}
+                          </h3>
                           <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
                             Mode: {result.mode === 'with_jd' ? 'Weighted Match' : 'Independent Evaluation'}
                           </p>
@@ -496,11 +538,22 @@ export default function App() {
                     {/* Main Dashboard Grid */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                       {/* Score Card */}
-                      <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
+                      <div className={cn(
+                        "bg-white rounded-2xl border p-8 shadow-sm flex flex-col items-center justify-center relative overflow-hidden transition-colors",
+                        result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                      )}>
                         <div className="absolute top-4 left-4 text-gray-300"><Calculator size={40} /></div>
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">ATS Readiness Score</h3>
+                        <h3 className={cn(
+                          "text-sm font-bold uppercase tracking-widest mb-6",
+                          result.requires_us_clearance_or_citizenship ? "text-red-500" : "text-gray-400"
+                        )}>ATS Readiness Score</h3>
                         {result.mode === 'with_jd' && (
-                          <div className="absolute top-4 right-4 bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border border-brand-gold/20">
+                          <div className={cn(
+                            "absolute top-4 right-4 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border",
+                            result.requires_us_clearance_or_citizenship 
+                              ? "bg-red-100 text-red-600 border-red-200" 
+                              : "bg-brand-gold/10 text-brand-gold border-brand-gold/20"
+                          )}>
                             Role Weighted
                           </div>
                         )}
@@ -518,13 +571,16 @@ export default function App() {
                                 endAngle={450}
                                 dataKey="value"
                               >
-                                <Cell fill="#027A68" />
+                                <Cell fill={result.requires_us_clearance_or_citizenship ? "#DC2626" : "#027A68"} />
                                 <Cell fill="#F3F4F6" />
                               </Pie>
                             </PieChart>
                           </ResponsiveContainer>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-5xl font-black text-gray-900">{result.ats_score}</span>
+                            <span className={cn(
+                              "text-5xl font-black",
+                              result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-gray-900"
+                            )}>{result.ats_score}</span>
                             <span className="text-xs font-bold text-gray-400">/ 100</span>
                           </div>
                         </div>
@@ -544,35 +600,48 @@ export default function App() {
                           label="Keyword Match"
                           value={result.keyword_match_percentage ? `${result.keyword_match_percentage}%` : 'N/A'}
                           description="Relevance to industry standards & JD keywords."
+                          variant={result.requires_us_clearance_or_citizenship ? 'red' : 'green'}
                         />
                         <MetricCard 
                           icon={<Award size={20} />}
                           label="Technical Depth"
                           value={result.technical_depth_level}
                           description="Evaluation of technical stack complexity."
+                          variant={result.requires_us_clearance_or_citizenship ? 'red' : 'green'}
                         />
                         <MetricCard 
                           icon={<Briefcase size={20} />}
                           label="Experience"
                           value={`${result.experience_years_detected} Years`}
                           description={`Career Level: ${result.career_progression_level}`}
+                          variant={result.requires_us_clearance_or_citizenship ? 'red' : 'green'}
                         />
                         <MetricCard 
                           icon={<GraduationCap size={20} />}
                           label="Education"
                           value={result.education_level_detected}
                           description={result.education_match ? "Matches requirements" : "Review needed"}
+                          variant={result.requires_us_clearance_or_citizenship ? 'red' : 'green'}
                         />
                       </div>
                     </div>
 
                     {/* Recruiter Simulation Engine */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+              <div className={cn(
+                "bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors",
+                result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+              )}>
+                <div className={cn(
+                  "p-6 border-b bg-gray-50/50",
+                  result.requires_us_clearance_or_citizenship ? "border-red-100 bg-red-50/30" : "border-gray-100"
+                )}>
                   <div className="flex items-center gap-2">
-                    <Users className="text-brand-green" size={20} />
-                    <h3 className="font-bold">Recruiter Simulation Engine</h3>
-                    <span className="ml-auto text-[10px] font-bold bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded uppercase">AI Persona Active</span>
+                    <Users className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"} size={20} />
+                    <h3 className={cn("font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>Recruiter Simulation Engine</h3>
+                    <span className={cn(
+                      "ml-auto text-[10px] font-bold px-2 py-0.5 rounded uppercase",
+                      result.requires_us_clearance_or_citizenship ? "bg-red-600 text-white" : "bg-brand-gold/10 text-brand-gold"
+                    )}>AI Persona Active</span>
                   </div>
                 </div>
                 <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -591,14 +660,26 @@ export default function App() {
                     </div>
                   </div>
                   <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl">
-                      <h4 className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <div className={cn(
+                      "p-4 rounded-xl border",
+                      result.requires_us_clearance_or_citizenship ? "bg-red-50/50 border-red-100" : "bg-emerald-50/50 border-emerald-100"
+                    )}>
+                      <h4 className={cn(
+                        "text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2",
+                        result.requires_us_clearance_or_citizenship ? "text-red-700" : "text-emerald-700"
+                      )}>
                         <CheckCircle2 size={14} /> Green Flags
                       </h4>
                       <ul className="space-y-2">
                         {result.analytics.recruiter_simulation.green_flags.map((flag, i) => (
-                          <li key={i} className="text-xs text-emerald-800 flex items-start gap-2">
-                            <span className="mt-1 w-1 h-1 bg-emerald-400 rounded-full shrink-0" />
+                          <li key={i} className={cn(
+                            "text-xs flex items-start gap-2",
+                            result.requires_us_clearance_or_citizenship ? "text-red-800" : "text-emerald-800"
+                          )}>
+                            <span className={cn(
+                              "mt-1 w-1 h-1 rounded-full shrink-0",
+                              result.requires_us_clearance_or_citizenship ? "bg-red-400" : "bg-emerald-400"
+                            )} />
                             {flag}
                           </li>
                         ))}
@@ -623,19 +704,34 @@ export default function App() {
 
               {/* Skill Gap Learning Path */}
               <div className="grid grid-cols-1 gap-8">
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-                    <GraduationCap className="text-brand-green" size={20} />
-                    <h3 className="font-bold">Skill Gap Learning Path</h3>
+                <div className={cn(
+                  "bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors",
+                  result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                )}>
+                  <div className={cn(
+                    "p-6 border-b flex items-center gap-2",
+                    result.requires_us_clearance_or_citizenship ? "border-red-100 bg-red-50/30" : "border-gray-100"
+                  )}>
+                    <GraduationCap className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"} size={20} />
+                    <h3 className={cn("font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>Skill Gap Learning Path</h3>
                   </div>
                   <div className="p-6 space-y-4">
                     {result.analytics.skill_gap_learning_path.map((item, i) => (
-                      <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-brand-gold/30 transition-colors">
-                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-brand-gold shadow-sm shrink-0">
+                      <div key={i} className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border transition-colors",
+                        result.requires_us_clearance_or_citizenship ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100"
+                      )}>
+                        <div className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center shadow-sm shrink-0",
+                          result.requires_us_clearance_or_citizenship ? "bg-white text-red-600" : "bg-white text-brand-gold"
+                        )}>
                           <BookOpen size={20} />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-brand-green uppercase tracking-wider">{item.skill}</p>
+                          <p className={cn(
+                            "text-xs font-bold uppercase tracking-wider",
+                            result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"
+                          )}>{item.skill}</p>
                           <p className="text-sm font-bold text-gray-900">{item.topic}</p>
                           <p className="text-[10px] text-gray-500 font-medium">Recommended: {item.resource_type}</p>
                         </div>
@@ -648,11 +744,17 @@ export default function App() {
 
               {/* Advanced Analytics Section */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className={cn(
+                  "lg:col-span-2 bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors",
+                  result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                )}>
+                  <div className={cn(
+                    "p-6 border-b flex items-center justify-between",
+                    result.requires_us_clearance_or_citizenship ? "border-red-100 bg-red-50/30" : "border-gray-100"
+                  )}>
                     <div className="flex items-center gap-2">
-                      <BarChart3 className="text-brand-green" size={20} />
-                      <h3 className="font-bold">Skill Gap Analysis</h3>
+                      <BarChart3 className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"} size={20} />
+                      <h3 className={cn("font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>Skill Gap Analysis</h3>
                     </div>
                   </div>
                   <div className="p-6 h-64">
@@ -680,7 +782,7 @@ export default function App() {
                         />
                         <Bar dataKey="gap_score" radius={[0, 4, 4, 0]}>
                           {result.analytics.skill_gap_analysis.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.gap_score > 50 ? '#C89C36' : '#027A68'} />
+                            <Cell key={`cell-${index}`} fill={result.requires_us_clearance_or_citizenship ? '#DC2626' : (entry.gap_score > 50 ? '#C89C36' : '#027A68')} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -689,26 +791,37 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
+                  <div className={cn(
+                    "bg-white border p-6 rounded-2xl shadow-sm transition-colors",
+                    result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                  )}>
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Leadership Potential</h4>
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-12 h-12 rounded-full flex items-center justify-center font-black text-white",
-                        result.analytics.leadership_potential === 'Exceptional' ? "bg-brand-gold" :
-                        result.analytics.leadership_potential === 'High' ? "bg-brand-green" :
-                        "bg-gray-400"
+                        result.requires_us_clearance_or_citizenship ? "bg-red-600" : (
+                          result.analytics.leadership_potential === 'Exceptional' ? "bg-brand-gold" :
+                          result.analytics.leadership_potential === 'High' ? "bg-brand-green" :
+                          "bg-gray-400"
+                        )
                       )}>
                         {result.analytics.leadership_potential.charAt(0)}
                       </div>
                       <div>
-                        <div className="font-bold text-lg">{result.analytics.leadership_potential}</div>
+                        <div className={cn("font-bold text-lg", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>{result.analytics.leadership_potential}</div>
                         <p className="text-xs text-gray-500">Based on role alignment & history.</p>
                       </div>
                     </div>
                   </div>
-                  <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
+                  <div className={cn(
+                    "bg-white border p-6 rounded-2xl shadow-sm transition-colors",
+                    result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                  )}>
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Tone Analysis</h4>
-                    <div className="text-sm font-medium text-gray-700 italic">
+                    <div className={cn(
+                      "text-sm font-medium italic",
+                      result.requires_us_clearance_or_citizenship ? "text-red-800" : "text-gray-700"
+                    )}>
                       "{result.analytics.tone_analysis}"
                     </div>
                   </div>
@@ -722,27 +835,36 @@ export default function App() {
                   label="Career Trajectory"
                   value={`${result.analytics.career_trajectory_score}%`}
                   description="Growth potential based on progression speed."
+                  variant={result.requires_us_clearance_or_citizenship ? 'red' : 'green'}
                 />
                 <MetricCard 
                   icon={<Search size={20} />}
                   label="Industry Relevance"
                   value={`${result.analytics.industry_relevance_score}%`}
                   description="Alignment with current market demands."
+                  variant={result.requires_us_clearance_or_citizenship ? 'red' : 'green'}
                 />
                 <MetricCard 
                   icon={<Cpu size={20} />}
                   label="Project Impact"
                   value={`${result.analytics.project_impact_score}%`}
                   description="Measurable influence of past projects."
+                  variant={result.requires_us_clearance_or_citizenship ? 'red' : 'green'}
                 />
               </div>
 
               {/* JD Matching Intelligence */}
               {result.mode === 'with_jd' && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-                    <Search className="text-brand-green" size={20} />
-                    <h3 className="font-bold">JD Matching Intelligence</h3>
+                <div className={cn(
+                  "bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors",
+                  result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                )}>
+                  <div className={cn(
+                    "p-6 border-b flex items-center gap-2",
+                    result.requires_us_clearance_or_citizenship ? "border-red-100 bg-red-50/50" : "border-gray-100"
+                  )}>
+                    <Search className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"} size={20} />
+                    <h3 className={cn("font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>JD Matching Intelligence</h3>
                   </div>
                   <div className="p-8">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -766,13 +888,19 @@ export default function App() {
 
                       {/* Matched Skills */}
                       <div className="space-y-4">
-                        <h4 className="text-xs font-bold text-brand-green uppercase tracking-widest flex items-center gap-2">
+                        <h4 className={cn(
+                          "text-xs font-bold uppercase tracking-widest flex items-center gap-2",
+                          result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"
+                        )}>
                           <CheckCircle2 size={14} /> Matched in Resume
                         </h4>
                         <div className="flex flex-wrap gap-2">
                           {result.matched_skills.length > 0 ? (
                             result.matched_skills.map((skill, i) => (
-                              <span key={i} className="px-2.5 py-1 bg-brand-green text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-sm">
+                              <span key={i} className={cn(
+                                "px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-sm",
+                                result.requires_us_clearance_or_citizenship ? "bg-red-600 text-white" : "bg-brand-green text-white"
+                              )}>
                                 <CheckCircle2 size={12} />
                                 {skill}
                               </span>
@@ -784,14 +912,29 @@ export default function App() {
                       </div>
 
                       {/* Match Analysis */}
-                      <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 flex flex-col justify-center">
-                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Match Analysis</h4>
+                      <div className={cn(
+                        "p-6 rounded-xl border flex flex-col justify-center",
+                        result.requires_us_clearance_or_citizenship ? "bg-red-50 border-red-200 ring-2 ring-red-100" : "bg-gray-50 border-gray-100"
+                      )}>
+                        <h4 className={cn(
+                          "text-xs font-bold uppercase tracking-widest mb-3",
+                          result.requires_us_clearance_or_citizenship ? "text-red-500" : "text-gray-400"
+                        )}>Match Analysis</h4>
                         <div className="space-y-3">
                           <div className="flex items-end gap-2">
-                            <span className="text-3xl font-black text-brand-green">{result.matched_skills.length}</span>
-                            <span className="text-sm text-gray-500 font-bold mb-1">/ {result.jd_skills?.length || 0} Skills Matched</span>
+                            <span className={cn(
+                              "text-4xl font-black",
+                              result.requires_us_clearance_or_citizenship ? "text-red-700" : "text-brand-green"
+                            )}>{result.matched_skills.length}</span>
+                            <span className={cn(
+                              "text-sm font-bold mb-1",
+                              result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-500"
+                            )}>/ {result.jd_skills?.length || 0} Skills Matched</span>
                           </div>
-                          <p className="text-xs text-gray-600 leading-relaxed">
+                          <p className={cn(
+                            "text-sm leading-relaxed",
+                            result.requires_us_clearance_or_citizenship ? "text-red-800 font-medium" : "text-xs text-gray-600"
+                          )}>
                             Your resume covers <span className="font-bold">{Math.round((result.matched_skills.length / (result.jd_skills?.length || 1)) * 100)}%</span> of the required technical competencies identified in the Job Description.
                           </p>
                           {result.missing_critical_skills.length > 0 && (
@@ -810,11 +953,17 @@ export default function App() {
               {/* Skills & Compliance */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Skills Analysis */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className={cn(
+                  "bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors",
+                  result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                )}>
+                  <div className={cn(
+                    "p-6 border-b flex items-center justify-between",
+                    result.requires_us_clearance_or_citizenship ? "border-red-100 bg-red-50/30" : "border-gray-100"
+                  )}>
                     <div className="flex items-center gap-2">
-                      <Cpu className="text-brand-green" size={20} />
-                      <h3 className="font-bold">Competency Analysis</h3>
+                      <Cpu className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"} size={20} />
+                      <h3 className={cn("font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>Competency Analysis</h3>
                     </div>
                   </div>
                   <div className="p-6 space-y-6">
@@ -822,7 +971,12 @@ export default function App() {
                       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Hard Skills Detected</h4>
                       <div className="flex flex-wrap gap-2">
                         {result.hard_skills_found.map((skill, i) => (
-                          <span key={i} className="px-3 py-1 bg-brand-green/10 text-brand-green rounded-lg text-xs font-semibold border border-brand-green/20">
+                          <span key={i} className={cn(
+                            "px-3 py-1 rounded-lg text-xs font-semibold border",
+                            result.requires_us_clearance_or_citizenship 
+                              ? "bg-red-50 text-red-700 border-red-100" 
+                              : "bg-brand-green/10 text-brand-green border-brand-green/20"
+                          )}>
                             {skill}
                           </span>
                         ))}
@@ -855,14 +1009,23 @@ export default function App() {
 
                 {/* Compliance & Science */}
                 <div className="space-y-8">
-                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-                      <ShieldCheck className="text-emerald-600" size={20} />
-                      <h3 className="font-bold">US Compliance Check</h3>
+                  <div className={cn(
+                    "bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors",
+                    result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                  )}>
+                    <div className={cn(
+                      "p-6 border-b flex items-center gap-2",
+                      result.requires_us_clearance_or_citizenship ? "border-red-100 bg-red-50/30" : "border-gray-100"
+                    )}>
+                      <ShieldCheck className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-emerald-600"} size={20} />
+                      <h3 className={cn("font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>US Compliance Check</h3>
                     </div>
                     <div className="p-6">
                       {result.us_compliance_issues.length === 0 ? (
-                        <div className="flex items-center gap-3 text-emerald-600 bg-emerald-50 p-4 rounded-xl">
+                        <div className={cn(
+                          "flex items-center gap-3 p-4 rounded-xl",
+                          result.requires_us_clearance_or_citizenship ? "text-red-600 bg-red-50" : "text-emerald-600 bg-emerald-50"
+                        )}>
                           <CheckCircle2 size={24} />
                           <div>
                             <p className="font-bold text-sm">Full Compliance Detected</p>
@@ -882,19 +1045,28 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-                      <Beaker className="text-brand-green" size={20} />
-                      <h3 className="font-bold">Science: Impact Analysis</h3>
+                  <div className={cn(
+                    "bg-white rounded-2xl border shadow-sm overflow-hidden transition-colors",
+                    result.requires_us_clearance_or_citizenship ? "border-red-200" : "border-gray-200"
+                  )}>
+                    <div className={cn(
+                      "p-6 border-b flex items-center gap-2",
+                      result.requires_us_clearance_or_citizenship ? "border-red-100 bg-red-50/30" : "border-gray-100"
+                    )}>
+                      <Beaker className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-brand-green"} size={20} />
+                      <h3 className={cn("font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>Science: Impact Analysis</h3>
                     </div>
                     <div className="p-6">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                      <div className={cn(
+                        "flex items-center justify-between p-4 rounded-xl",
+                        result.requires_us_clearance_or_citizenship ? "bg-red-50" : "bg-gray-50"
+                      )}>
                         <div>
-                          <p className="text-sm font-bold">Quantified Achievements</p>
+                          <p className={cn("text-sm font-bold", result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900")}>Quantified Achievements</p>
                           <p className="text-xs text-gray-500">Evidence of measurable success (%, $, KPIs).</p>
                         </div>
                         {result.quantified_achievements_detected ? (
-                          <div className="text-emerald-500"><CheckCircle2 size={24} /></div>
+                          <div className={result.requires_us_clearance_or_citizenship ? "text-red-600" : "text-emerald-500"}><CheckCircle2 size={24} /></div>
                         ) : (
                           <div className="text-amber-500"><AlertCircle size={24} /></div>
                         )}
@@ -905,15 +1077,21 @@ export default function App() {
               </div>
 
                 {/* Suggestions */}
-                <div className="bg-brand-green rounded-2xl p-8 text-white">
+                <div className={cn(
+                  "rounded-2xl p-8 text-white transition-colors",
+                  result.requires_us_clearance_or_citizenship ? "bg-red-600" : "bg-brand-green"
+                )}>
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <ChevronRight className="text-brand-gold" />
+                    <ChevronRight className={result.requires_us_clearance_or_citizenship ? "text-white" : "text-brand-gold"} />
                     Auriic Optimization Roadmap
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {result.improvement_suggestions.map((suggestion, i) => (
                       <div key={i} className="flex gap-4 p-4 bg-white/5 rounded-xl border border-white/10">
-                        <div className="w-8 h-8 rounded-full bg-brand-gold/20 flex items-center justify-center shrink-0 font-bold text-brand-gold">
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold",
+                          result.requires_us_clearance_or_citizenship ? "bg-white text-red-600" : "bg-brand-gold/20 text-brand-gold"
+                        )}>
                           {i + 1}
                         </div>
                         <p className="text-sm text-brand-white/90 leading-relaxed">{suggestion}</p>
@@ -940,16 +1118,25 @@ export default function App() {
   );
 }
 
-function MetricCard({ icon, label, value, description }: { icon: React.ReactNode, label: string, value: string | number, description: string }) {
+function MetricCard({ icon, label, value, description, variant = 'green' }: { icon: React.ReactNode, label: string, value: string | number, description: string, variant?: 'green' | 'red' }) {
   return (
-    <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:border-brand-green/20 transition-colors">
+    <div className={cn(
+      "bg-white border p-6 rounded-2xl shadow-sm transition-colors",
+      variant === 'red' ? "border-red-200 hover:border-red-300" : "border-gray-200 hover:border-brand-green/20"
+    )}>
       <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-brand-green/5 text-brand-green rounded-lg">
+        <div className={cn(
+          "p-2 rounded-lg",
+          variant === 'red' ? "bg-red-50 text-red-600" : "bg-brand-green/5 text-brand-green"
+        )}>
           {icon}
         </div>
         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-widest">{label}</h3>
       </div>
-      <div className="text-2xl font-black text-gray-900 mb-1">{value}</div>
+      <div className={cn(
+        "text-2xl font-black mb-1",
+        variant === 'red' ? "text-red-700" : "text-gray-900"
+      )}>{value}</div>
       <p className="text-xs text-gray-500 leading-relaxed">{description}</p>
     </div>
   );
