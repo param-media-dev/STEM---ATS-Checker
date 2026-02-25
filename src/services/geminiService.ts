@@ -112,20 +112,7 @@ Return ONLY valid JSON in this structure:
     "tone_analysis": string,
     "industry_relevance_score": number,
     "leadership_potential": "Low" | "Medium" | "High" | "Exceptional",
-    "project_impact_score": number,
-    "interview_probability_score": number,
-    "recruiter_simulation": {
-      "first_impression": string,
-      "red_flags": string[],
-      "green_flags": string[],
-      "perceived_seniority": string
-    },
-    "skill_gap_learning_path": { "skill": string, "resource_type": string, "topic": string }[],
-    "linkedin_optimization": {
-      "headline_suggestion": string,
-      "about_section_tips": string[],
-      "experience_formatting": string
-    }
+    "project_impact_score": number
   }
 }
 
@@ -155,19 +142,6 @@ export interface ATSResult {
     industry_relevance_score: number;
     leadership_potential: "Low" | "Medium" | "High" | "Exceptional";
     project_impact_score: number;
-    interview_probability_score: number;
-    recruiter_simulation: {
-      first_impression: string;
-      red_flags: string[];
-      green_flags: string[];
-      perceived_seniority: string;
-    };
-    skill_gap_learning_path: { skill: string; resource_type: string; topic: string }[];
-    linkedin_optimization: {
-      headline_suggestion: string;
-      about_section_tips: string[];
-      experience_formatting: string;
-    };
   };
 }
 
