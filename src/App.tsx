@@ -52,6 +52,8 @@ function cn(...inputs: ClassValue[]) {
 type ResumeEntry = {
   id: string;
   name: string;
+  mode: 'text' | 'pdf';
+  text: string;
   file: File | null;
 };
 
@@ -67,7 +69,7 @@ export default function App() {
   const [step, setStep] = useState<0 | 1 | 2>(0); // 0: Domain, 1: Upload, 2: Results
   const [domain, setDomain] = useState<Domain | null>(null);
   const [resumes, setResumes] = useState<ResumeEntry[]>([
-    { id: crypto.randomUUID(), name: 'Resume 1', file: null }
+    { id: crypto.randomUUID(), name: 'Resume 1', mode: 'text', text: '', file: null }
   ]);
   const [jobDescriptions, setJobDescriptions] = useState<string[]>(['']);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -117,7 +119,7 @@ export default function App() {
   };
 
   const addResume = () => {
-    setResumes([...resumes, { id: crypto.randomUUID(), name: `Resume ${resumes.length + 1}`, file: null }]);
+    setResumes([...resumes, { id: crypto.randomUUID(), name: `Resume ${resumes.length + 1}`, mode: 'text', text: '', file: null }]);
   };
 
   const removeResume = (id: string) => {
@@ -131,9 +133,9 @@ export default function App() {
   };
 
   const handleAnalyze = async () => {
-    const activeResumes = resumes.filter(r => r.file);
+    const activeResumes = resumes.filter(r => (r.mode === 'text' && r.text.trim()) || (r.mode === 'pdf' && r.file));
     if (activeResumes.length === 0) {
-      setError('Please upload at least one PDF resume.');
+      setError('Please provide at least one resume.');
       return;
     }
 
@@ -168,9 +170,11 @@ export default function App() {
         const jdResults: ATSResult[] = [];
         let resumeSource: { text?: string; pdfBase64?: string } = {};
 
-        if (resume.file) {
+        if (resume.mode === 'pdf' && resume.file) {
           const base64 = await fileToBase64(resume.file);
           resumeSource = { pdfBase64: base64 };
+        } else {
+          resumeSource = { text: resume.text };
         }
 
         // Run JD analyses for this resume in parallel
@@ -228,12 +232,8 @@ export default function App() {
       setStep(2);
     } catch (err: any) {
       console.error('Analysis failed:', err);
-      let msg = err.message || 'An unexpected error occurred during analysis.';
-      if (msg.includes('Unexpected token') || msg.includes('is not valid JSON')) {
-        msg = "The server returned an invalid response (likely a 404 or 500 error page). Please check if the backend is running correctly.";
-      }
       if (!isQuotaExceeded) {
-        setError(msg);
+        setError(err.message || 'An unexpected error occurred during analysis.');
       }
     } finally {
       setIsAnalyzing(false);
@@ -246,7 +246,7 @@ export default function App() {
     setError(null);
     setStep(0);
     setDomain(null);
-    setResumes([{ id: crypto.randomUUID(), name: 'Resume 1', file: null }]);
+    setResumes([{ id: crypto.randomUUID(), name: 'Resume 1', mode: 'text', text: '', file: null }]);
     setJobDescriptions(['']);
   };
 
@@ -398,6 +398,26 @@ export default function App() {
                               className="bg-transparent font-bold text-sm text-gray-900 border-none focus:ring-0 p-0 w-2/3"
                             />
                             <div className="flex items-center gap-2">
+                              <div className="flex bg-white p-1 rounded-lg border border-gray-200">
+                                <button 
+                                  onClick={() => updateResume(resume.id, { mode: 'text' })}
+                                  className={cn(
+                                    "px-2 py-0.5 text-[10px] font-bold rounded transition-all",
+                                    resume.mode === 'text' ? "bg-brand-green text-white" : "text-gray-500"
+                                  )}
+                                >
+                                  TEXT
+                                </button>
+                                <button 
+                                  onClick={() => updateResume(resume.id, { mode: 'pdf' })}
+                                  className={cn(
+                                    "px-2 py-0.5 text-[10px] font-bold rounded transition-all",
+                                    resume.mode === 'pdf' ? "bg-brand-green text-white" : "text-gray-500"
+                                  )}
+                                >
+                                  PDF
+                                </button>
+                              </div>
                               {resumes.length > 1 && (
                                 <button 
                                   onClick={() => removeResume(resume.id)}
@@ -409,25 +429,34 @@ export default function App() {
                             </div>
                           </div>
 
-                          <div 
-                            onClick={() => fileInputRefs.current[resume.id]?.click()}
-                            className="w-full h-32 border-2 border-dashed border-gray-200 bg-white rounded-xl flex flex-col items-center justify-center gap-2 hover:border-brand-gold hover:bg-brand-gold/5 transition-all cursor-pointer"
-                          >
-                            <input 
-                              type="file" 
-                              ref={el => fileInputRefs.current[resume.id] = el}
-                              className="hidden" 
-                              accept=".pdf" 
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) updateResume(resume.id, { file });
-                              }}
+                          {resume.mode === 'text' ? (
+                            <textarea
+                              className="w-full h-32 p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-xs font-mono"
+                              placeholder="Paste resume text..."
+                              value={resume.text}
+                              onChange={(e) => updateResume(resume.id, { text: e.target.value })}
                             />
-                            <Upload size={20} className="text-brand-gold" />
-                            <p className="text-[10px] font-bold text-gray-700 truncate max-w-[150px]">
-                              {resume.file ? resume.file.name : 'Upload PDF'}
-                            </p>
-                          </div>
+                          ) : (
+                            <div 
+                              onClick={() => fileInputRefs.current[resume.id]?.click()}
+                              className="w-full h-32 border-2 border-dashed border-gray-200 bg-white rounded-xl flex flex-col items-center justify-center gap-2 hover:border-brand-gold hover:bg-brand-gold/5 transition-all cursor-pointer"
+                            >
+                              <input 
+                                type="file" 
+                                ref={el => fileInputRefs.current[resume.id] = el}
+                                className="hidden" 
+                                accept=".pdf" 
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) updateResume(resume.id, { file });
+                                }}
+                              />
+                              <Upload size={20} className="text-brand-gold" />
+                              <p className="text-[10px] font-bold text-gray-700 truncate max-w-[150px]">
+                                {resume.file ? resume.file.name : 'Upload PDF'}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
