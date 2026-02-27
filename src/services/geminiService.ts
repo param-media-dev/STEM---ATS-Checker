@@ -181,83 +181,100 @@ export async function analyzeResume(
   resumeSource: { text?: string; pdfBase64?: string },
   jobDescription?: string,
   engine: "gemini" | "openai" | "claude" = "gemini",
-  userApiKey?: string
+  userApiKey?: string,
+  retryCount = 0
 ): Promise<ATSResult> {
-  if (engine === "openai" || engine === "claude") {
-    // OpenAI and Claude must go through the backend to protect the key (or use user provided key)
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: resumeSource.text,
-        pdfBase64: resumeSource.pdfBase64,
-        jobDescription,
-        engine,
-        userApiKey
-      }),
-    });
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY = 2000; // 2 seconds
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to analyze resume with OpenAI");
+  try {
+    if (engine === "openai" || engine === "claude") {
+      // OpenAI and Claude must go through the backend to protect the key (or use user provided key)
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: resumeSource.text,
+          pdfBase64: resumeSource.pdfBase64,
+          jobDescription,
+          engine,
+          userApiKey
+        }),
+      });
+
+      if (response.status === 429 && retryCount < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+        return analyzeResume(resumeSource, jobDescription, engine, userApiKey, retryCount + 1);
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown server error" }));
+        throw new Error(errorData.error || `Failed to analyze resume with ${engine}`);
+      }
+
+      return await response.json();
     }
 
-    return await response.json();
-  }
+    // Gemini Path (Frontend as per instructions)
+    const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
-  // Gemini Path (Frontend as per instructions)
-  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+    const genAI = new GoogleGenAI({ apiKey });
+    const model = "gemini-3-flash-preview";
 
-  const genAI = new GoogleGenAI({ apiKey });
-  const model = "gemini-3-flash-preview";
+    const parts: any[] = [];
 
-  const parts: any[] = [];
+    if (resumeSource.pdfBase64) {
+      parts.push({
+        inlineData: {
+          mimeType: "application/pdf",
+          data: resumeSource.pdfBase64,
+        },
+      });
+      parts.push({
+        text: "Analyze the attached resume PDF based on the STEM principles provided in your system instructions.",
+      });
+    } else if (resumeSource.text) {
+      parts.push({
+        text: `RESUME CONTENT:\n${resumeSource.text}`,
+      });
+    } else {
+      throw new Error("No resume content provided");
+    }
 
-  if (resumeSource.pdfBase64) {
-    parts.push({
-      inlineData: {
-        mimeType: "application/pdf",
-        data: resumeSource.pdfBase64,
+    if (jobDescription) {
+      parts.push({
+        text: `JOB DESCRIPTION:\n${jobDescription}`,
+      });
+    } else {
+      parts.push({
+        text: "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently.",
+      });
+    }
+
+    const response = await genAI.models.generateContent({
+      model,
+      contents: [{ role: "user", parts }],
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        temperature: 0,
       },
     });
-    parts.push({
-      text: "Analyze the attached resume PDF based on the STEM principles provided in your system instructions.",
-    });
-  } else if (resumeSource.text) {
-    parts.push({
-      text: `RESUME CONTENT:\n${resumeSource.text}`,
-    });
-  } else {
-    throw new Error("No resume content provided");
+
+    const text = response.text;
+    if (!text) throw new Error("No response from AI");
+
+    const result = JSON.parse(text) as ATSResult;
+    result.engine = "gemini";
+    return result;
+  } catch (err: any) {
+    if ((err.message?.includes('429') || err.message?.includes('quota') || err.message?.includes('limit')) && retryCount < MAX_RETRIES) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+      return analyzeResume(resumeSource, jobDescription, engine, userApiKey, retryCount + 1);
+    }
+    throw err;
   }
-
-  if (jobDescription) {
-    parts.push({
-      text: `JOB DESCRIPTION:\n${jobDescription}`,
-    });
-  } else {
-    parts.push({
-      text: "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently.",
-    });
-  }
-
-  const response = await genAI.models.generateContent({
-    model,
-    contents: [{ role: "user", parts }],
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      temperature: 0,
-    },
-  });
-
-  const text = response.text;
-  if (!text) throw new Error("No response from AI");
-
-  const result = JSON.parse(text) as ATSResult;
-  result.engine = "gemini";
-  return result;
 }

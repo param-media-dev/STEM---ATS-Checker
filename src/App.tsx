@@ -228,8 +228,12 @@ export default function App() {
       setStep(2);
     } catch (err: any) {
       console.error('Analysis failed:', err);
+      let msg = err.message || 'An unexpected error occurred during analysis.';
+      if (msg.includes('Unexpected token') || msg.includes('is not valid JSON')) {
+        msg = "The server returned an invalid response (likely a 404 or 500 error page). Please check if the backend is running correctly.";
+      }
       if (!isQuotaExceeded) {
-        setError(err.message || 'An unexpected error occurred during analysis.');
+        setError(msg);
       }
     } finally {
       setIsAnalyzing(false);
