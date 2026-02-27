@@ -7,7 +7,6 @@ const pdf = require("pdf-parse");
 import crypto from "crypto-js";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
-import Anthropic from "@anthropic-ai/sdk";
 import dotenv from "dotenv";
 import path from "path";
 
@@ -205,43 +204,7 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
 
       const resultText = completion.choices[0].message.content;
       if (!resultText) throw new Error("No response from OpenAI");
-      const result = JSON.parse(resultText);
-      result.engine = "openai";
-      return res.json(result);
-    } else if (engine === "claude") {
-      const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
-
-      const anthropic = new Anthropic({ apiKey });
-      const prompt = `
-        ${SYSTEM_INSTRUCTION}
-        
-        RESUME CONTENT:
-        ${resumeContent}
-        
-        ${jobDescription ? `JOB DESCRIPTION:\n${jobDescription}` : "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently."}
-        
-        IMPORTANT: Return ONLY valid JSON.
-      `;
-
-      const msg = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 4096,
-        system: SYSTEM_INSTRUCTION,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0,
-      });
-
-      const resultText = msg.content[0].type === 'text' ? msg.content[0].text : '';
-      if (!resultText) throw new Error("No response from Claude");
-      
-      // Claude might wrap JSON in markdown blocks
-      const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-      const cleanedJson = jsonMatch ? jsonMatch[0] : resultText;
-      
-      const result = JSON.parse(cleanedJson);
-      result.engine = "claude";
-      return res.json(result);
+      return res.json(JSON.parse(resultText));
     } else {
       // Gemini Path
       const apiKey = userApiKey || process.env.GEMINI_API_KEY;

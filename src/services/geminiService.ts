@@ -141,7 +141,6 @@ Be analytical. Be strict. Be evidence-based. Do not include explanations outside
 
 export interface ATSResult {
   mode: "with_jd" | "without_jd";
-  engine?: "gemini" | "openai" | "claude";
   ats_score: number;
   keyword_match_percentage: number | null;
   jd_skills: string[];
@@ -180,11 +179,11 @@ export interface ATSResult {
 export async function analyzeResume(
   resumeSource: { text?: string; pdfBase64?: string },
   jobDescription?: string,
-  engine: "gemini" | "openai" | "claude" = "gemini",
+  engine: "gemini" | "openai" = "gemini",
   userApiKey?: string
 ): Promise<ATSResult> {
-  if (engine === "openai" || engine === "claude") {
-    // OpenAI and Claude must go through the backend to protect the key (or use user provided key)
+  if (engine === "openai") {
+    // OpenAI must go through the backend to protect the key (or use user provided key)
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: {
@@ -194,7 +193,7 @@ export async function analyzeResume(
         text: resumeSource.text,
         pdfBase64: resumeSource.pdfBase64,
         jobDescription,
-        engine,
+        engine: "openai",
         userApiKey
       }),
     });
@@ -257,7 +256,5 @@ export async function analyzeResume(
   const text = response.text;
   if (!text) throw new Error("No response from AI");
 
-  const result = JSON.parse(text) as ATSResult;
-  result.engine = "gemini";
-  return result;
+  return JSON.parse(text) as ATSResult;
 }

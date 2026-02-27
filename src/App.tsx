@@ -184,13 +184,7 @@ export default function App() {
 
           // Determine starting engine based on a combination of resume and JD index to spread load
           const taskIndex = activeResumes.indexOf(resume) * activeJDs.length + jdIdx;
-          const engineRotation: ('gemini' | 'openai' | 'claude')[] = ['gemini', 'openai', 'claude'];
-          const startIndex = taskIndex % 3;
-          const engines: ('gemini' | 'openai' | 'claude')[] = [
-            engineRotation[startIndex],
-            engineRotation[(startIndex + 1) % 3],
-            engineRotation[(startIndex + 2) % 3]
-          ];
+          const engines: ('gemini' | 'openai')[] = taskIndex % 2 === 0 ? ['gemini', 'openai'] : ['openai', 'gemini'];
 
           for (const currentEngine of engines) {
             try {
@@ -698,14 +692,8 @@ export default function App() {
                           )}>
                             Analysis for {resumeResults[selectedResumeIndex]?.resumeName} vs JD #{selectedJDIndex + 1}
                           </h3>
-                          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold flex items-center gap-2">
+                          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
                             Mode: {result.mode === 'with_jd' ? 'Weighted Match' : 'Independent Evaluation'}
-                            {result.engine && (
-                              <>
-                                <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                                <span className="text-brand-gold">Engine: {result.engine.toUpperCase()}</span>
-                              </>
-                            )}
                           </p>
                         </div>
                       </div>
