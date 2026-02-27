@@ -164,19 +164,24 @@ app.use(express.json({ limit: '50mb' }));
 // API Routes
 app.post("/api/analyze", upload.single("resume"), async (req, res) => {
   try {
-    const { text, jobDescription, engine = "gemini", userApiKey } = req.body;
+    const { text, pdfBase64, jobDescription, engine = "gemini", userApiKey } = req.body;
     let resumeContent = "";
     let resumeBuffer: Buffer | null = null;
 
     if (req.file) {
       resumeBuffer = req.file.buffer;
+    } else if (pdfBase64) {
+      resumeBuffer = Buffer.from(pdfBase64, 'base64');
+    }
+
+    if (resumeBuffer) {
       const pdfParser = typeof pdf === 'function' ? pdf : pdf.default;
       const pdfData = await pdfParser(resumeBuffer);
       resumeContent = pdfData.text;
     } else if (text) {
       resumeContent = text;
     } else {
-      return res.status(400).json({ error: "No resume content provided" });
+      return res.status(400).json({ error: "No resume content provided. Please upload a PDF." });
     }
 
     if (engine === "openai") {
