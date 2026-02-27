@@ -1,6 +1,6 @@
 {
-  "name": "STEM-ATS: Enterprise Resume Analyzer",
-  "description": "A strict, evidence-based Applicant Tracking System using STEM principles to evaluate resumes against job descriptions with US corporate compliance checks.",
+  "name": "Auriic Intelligence: Multi-Domain ATS",
+  "description": "A multi-domain, multi-resume Applicant Tracking System with cross-analysis and restricted role detection for Healthcare, IT, Supply Chain, and Business Analytics.",
   "requestFramePermissions": [
     "camera"
   ]

@@ -29,7 +29,15 @@ import {
   Plus,
   Trash2,
   ChevronLeft,
-  LayoutDashboard
+  LayoutDashboard,
+  Activity,
+  Code,
+  Truck,
+  LineChart,
+  Database,
+  Stethoscope,
+  Box,
+  TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeResume, ATSResult } from './services/geminiService';
@@ -41,18 +49,49 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+type ResumeEntry = {
+  id: string;
+  name: string;
+  file: File | null;
+};
+
+type ResumeResult = {
+  resumeId: string;
+  resumeName: string;
+  jdResults: ATSResult[];
+};
+
+type Domain = 'Healthcare' | 'IT' | 'Supply Chain' | 'Business Analytics';
+
 export default function App() {
-  const [resumeText, setResumeText] = useState('');
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [resumeMode, setResumeMode] = useState<'text' | 'pdf'>('text');
+  const [step, setStep] = useState<0 | 1 | 2>(0); // 0: Domain, 1: Upload, 2: Results
+  const [domain, setDomain] = useState<Domain | null>(null);
+  const [resumes, setResumes] = useState<ResumeEntry[]>([
+    { id: crypto.randomUUID(), name: 'Resume 1', file: null }
+  ]);
   const [jobDescriptions, setJobDescriptions] = useState<string[]>(['']);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
-  const [results, setResults] = useState<ATSResult[]>([]);
-  const [selectedResultIndex, setSelectedResultIndex] = useState<number>(0);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [resumeResults, setResumeResults] = useState<ResumeResult[]>([]);
+  const [selectedResumeIndex, setSelectedResumeIndex] = useState<number>(0);
+  const [selectedJDIndex, setSelectedJDIndex] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  React.useEffect(() => {
+    let interval: any;
+    if (isAnalyzing && startTime) {
+      interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+    } else {
+      setElapsedTime(0);
+    }
+    return () => clearInterval(interval);
+  }, [isAnalyzing, startTime]);
 
   const handleSelectKey = async () => {
     try {
@@ -77,13 +116,24 @@ export default function App() {
     });
   };
 
-  const handleAnalyze = async () => {
-    if (resumeMode === 'text' && !resumeText.trim()) {
-      setError('Please provide resume text.');
-      return;
+  const addResume = () => {
+    setResumes([...resumes, { id: crypto.randomUUID(), name: `Resume ${resumes.length + 1}`, file: null }]);
+  };
+
+  const removeResume = (id: string) => {
+    if (resumes.length > 1) {
+      setResumes(resumes.filter(r => r.id !== id));
     }
-    if (resumeMode === 'pdf' && !resumeFile) {
-      setError('Please upload a resume PDF.');
+  };
+
+  const updateResume = (id: string, updates: Partial<ResumeEntry>) => {
+    setResumes(resumes.map(r => r.id === id ? { ...r, ...updates } : r));
+  };
+
+  const handleAnalyze = async () => {
+    const activeResumes = resumes.filter(r => r.file);
+    if (activeResumes.length === 0) {
+      setError('Please upload at least one PDF resume.');
       return;
     }
 
@@ -96,43 +146,104 @@ export default function App() {
     setIsAnalyzing(true);
     setError(null);
     setIsQuotaExceeded(false);
-    setAnalysisProgress({ current: 0, total: activeJDs.length });
+    setStartTime(Date.now());
+    setElapsedTime(0);
+    const totalTasks = activeResumes.length * activeJDs.length;
+    setAnalysisProgress({ current: 0, total: totalTasks });
     
     try {
-      let resumeSource: { text?: string; pdfBase64?: string } = {};
-      
-      if (resumeMode === 'pdf' && resumeFile) {
-        const base64 = await fileToBase64(resumeFile);
-        resumeSource = { pdfBase64: base64 };
-      } else {
-        resumeSource = { text: resumeText };
+      const allResumeResults: ResumeResult[] = [];
+      let completedTasks = 0;
+
+      // Prepare all tasks
+      const tasks = [];
+      for (const resume of activeResumes) {
+        for (const jd of activeJDs) {
+          tasks.push({ resume, jd });
+        }
       }
 
-      const allResults: ATSResult[] = [];
-      for (let i = 0; i < activeJDs.length; i++) {
-        setAnalysisProgress(prev => ({ ...prev, current: i + 1 }));
-        const data = await analyzeResume(resumeSource, activeJDs[i]);
-        allResults.push(data);
-      }
-      
-      setResults(allResults);
-      setSelectedResultIndex(0);
+      // Process all tasks in parallel
+      const results = await Promise.all(activeResumes.map(async (resume) => {
+        const jdResults: ATSResult[] = [];
+        let resumeSource: { text?: string; pdfBase64?: string } = {};
+
+        if (resume.file) {
+          const base64 = await fileToBase64(resume.file);
+          resumeSource = { pdfBase64: base64 };
+        }
+
+        // Run JD analyses for this resume in parallel
+        const resumeJdResults = await Promise.all(activeJDs.map(async (jd, jdIdx) => {
+          let result: ATSResult | null = null;
+          let lastError: any = null;
+
+          // Determine starting engine based on a combination of resume and JD index to spread load
+          const taskIndex = activeResumes.indexOf(resume) * activeJDs.length + jdIdx;
+          const engineRotation: ('gemini' | 'openai' | 'claude')[] = ['gemini', 'openai', 'claude'];
+          const startIndex = taskIndex % 3;
+          const engines: ('gemini' | 'openai' | 'claude')[] = [
+            engineRotation[startIndex],
+            engineRotation[(startIndex + 1) % 3],
+            engineRotation[(startIndex + 2) % 3]
+          ];
+
+          for (const currentEngine of engines) {
+            try {
+              result = await analyzeResume(resumeSource, jd, currentEngine);
+              if (result) break;
+            } catch (err: any) {
+              lastError = err;
+              const errorMessage = err.message || '';
+              if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota') || errorMessage.includes('limit')) {
+                continue; 
+              }
+              continue;
+            }
+          }
+
+          if (!result) {
+            if (lastError?.message?.includes('429') || lastError?.message?.includes('RESOURCE_EXHAUSTED')) {
+              setIsQuotaExceeded(true);
+              throw new Error('API Quota Exceeded on both engines. Please wait a moment.');
+            }
+            throw lastError || new Error('Analysis failed on all available engines.');
+          }
+
+          completedTasks++;
+          setAnalysisProgress(prev => ({ ...prev, current: completedTasks }));
+          return result;
+        }));
+
+        return {
+          resumeId: resume.id,
+          resumeName: resume.name,
+          jdResults: resumeJdResults
+        };
+      }));
+
+      setResumeResults(results);
+      setSelectedResumeIndex(0);
+      setSelectedJDIndex(0);
+      setStep(2);
     } catch (err: any) {
-      const errorMessage = err.message || '';
-      if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota')) {
-        setIsQuotaExceeded(true);
-        setError('API Quota Exceeded. The free tier has strict limits. Please wait a moment or use your own API key for higher limits.');
-      } else {
-        setError(errorMessage || 'An error occurred during analysis.');
+      console.error('Analysis failed:', err);
+      if (!isQuotaExceeded) {
+        setError(err.message || 'An unexpected error occurred during analysis.');
       }
     } finally {
       setIsAnalyzing(false);
+      setStartTime(null);
     }
   };
 
   const reset = () => {
-    setResults([]);
+    setResumeResults([]);
     setError(null);
+    setStep(0);
+    setDomain(null);
+    setResumes([{ id: crypto.randomUUID(), name: 'Resume 1', file: null }]);
+    setJobDescriptions(['']);
   };
 
   const addJD = () => {
@@ -151,16 +262,6 @@ export default function App() {
     const newJDs = [...jobDescriptions];
     newJDs[index] = value;
     setJobDescriptions(newJDs);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type === 'application/pdf') {
-      setResumeFile(file);
-      setError(null);
-    } else if (file) {
-      setError('Please upload a valid PDF file.');
-    }
   };
 
   return (
@@ -195,223 +296,241 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
-          {results.length === 0 ? (
+          {step === 0 ? (
             <motion.div
-              key="input-stage"
+              key="domain-selection"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+              className="max-w-4xl mx-auto space-y-8"
             >
-              {/* Left Column: Inputs */}
-              <div className="space-y-6">
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <FileText className="text-brand-green" size={20} />
-                      <h2 className="font-semibold text-lg">Resume Content</h2>
-                    </div>
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                      <button 
-                        onClick={() => setResumeMode('text')}
-                        className={cn(
-                          "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                          resumeMode === 'text' ? "bg-white text-brand-green shadow-sm" : "text-gray-500 hover:text-gray-700"
-                        )}
-                      >
-                        Text
-                      </button>
-                      <button 
-                        onClick={() => setResumeMode('pdf')}
-                        className={cn(
-                          "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                          resumeMode === 'pdf' ? "bg-white text-brand-green shadow-sm" : "text-gray-500 hover:text-gray-700"
-                        )}
-                      >
-                        PDF
-                      </button>
-                    </div>
-                  </div>
+              <div className="text-center space-y-4">
+                <h2 className="text-4xl font-black text-gray-900 tracking-tight">Select Your Domain</h2>
+                <p className="text-gray-500 text-lg">Choose the industry domain to tailor the Auriic Intelligence analysis.</p>
+              </div>
 
-                  {resumeMode === 'text' ? (
-                    <textarea
-                      className="w-full h-64 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-sm font-mono"
-                      placeholder="Paste resume text here..."
-                      value={resumeText}
-                      onChange={(e) => setResumeText(e.target.value)}
-                    />
-                  ) : (
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full h-64 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-4 hover:border-brand-gold hover:bg-brand-gold/5 transition-all cursor-pointer group"
-                    >
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept=".pdf" 
-                        onChange={handleFileChange}
-                      />
-                      <div className="w-16 h-16 bg-brand-gold/10 text-brand-gold rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Upload size={32} />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-gray-700">
-                          {resumeFile ? resumeFile.name : 'Click to upload Resume PDF'}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {resumeFile ? `${(resumeFile.size / 1024 / 1024).toFixed(2)} MB` : 'Maximum size: 10MB'}
-                        </p>
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[
+                  { id: 'Healthcare', icon: <Stethoscope size={32} />, color: 'bg-blue-500', desc: 'Clinical, Admin, & Biotech roles' },
+                  { id: 'IT', icon: <Code size={32} />, color: 'bg-emerald-500', desc: 'Software, Cloud, & Cybersecurity' },
+                  { id: 'Supply Chain', icon: <Truck size={32} />, color: 'bg-amber-500', desc: 'Logistics, Operations, & Procurement' },
+                  { id: 'Business Analytics', icon: <LineChart size={32} />, color: 'bg-indigo-500', desc: 'Data Science, BI, & Strategy' }
+                ].map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => {
+                      setDomain(d.id as Domain);
+                      setStep(1);
+                    }}
+                    className="group bg-white p-8 rounded-3xl border border-gray-200 shadow-sm hover:border-brand-green hover:shadow-xl transition-all text-left flex items-start gap-6"
+                  >
+                    <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform", d.color)}>
+                      {d.icon}
                     </div>
-                  )}
-                  
-                  <p className="mt-2 text-xs text-gray-400">
-                    {resumeMode === 'text' ? 'STEM-ATS performs best with raw text extraction.' : 'Gemini 3.1 Pro will analyze the document structure and content.'}
-                  </p>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">{d.id}</h3>
+                      <p className="text-gray-500 text-sm">{d.desc}</p>
+                    </div>
+                    <ChevronRight className="ml-auto mt-1 text-gray-300 group-hover:text-brand-green group-hover:translate-x-1 transition-all" size={24} />
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          ) : step === 1 ? (
+            <motion.div
+              key="upload-stage"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-8"
+            >
+              {/* Domain Header */}
+              <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setStep(0)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <div>
+                    <h2 className="font-bold text-lg">Domain: {domain}</h2>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Step 2: Upload Resumes & JDs</p>
+                  </div>
                 </div>
-
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="text-brand-green" size={20} />
-                      <h2 className="font-semibold text-lg">Job Descriptions</h2>
-                    </div>
-                    <button 
-                      onClick={addJD}
-                      className="p-1.5 bg-brand-green/10 text-brand-green rounded-lg hover:bg-brand-green/20 transition-colors flex items-center gap-1 text-xs font-bold"
-                    >
-                      <Plus size={14} /> Add JD
-                    </button>
+                <div className="flex items-center gap-2">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-bold text-gray-900">{resumes.length} Resumes</p>
+                    <p className="text-xs font-bold text-gray-900">{jobDescriptions.length} JDs</p>
                   </div>
-                  
-                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                    {jobDescriptions.map((jd, index) => (
-                      <div key={index} className="relative group">
-                        <div className="absolute -left-3 top-4 w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-400 border border-gray-200">
-                          {index + 1}
-                        </div>
-                        <textarea
-                          className="w-full h-32 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-sm font-mono"
-                          placeholder={`Paste job description #${index + 1} here...`}
-                          value={jd}
-                          onChange={(e) => updateJD(index, e.target.value)}
-                        />
-                        {jobDescriptions.length > 1 && (
-                          <button 
-                            onClick={() => removeJD(index)}
-                            className="absolute top-2 right-2 p-1.5 bg-white/80 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm border border-red-100"
-                            title="Remove this JD"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                  <div className="w-10 h-10 bg-brand-green/10 text-brand-green rounded-full flex items-center justify-center">
+                    <Database size={20} />
                   </div>
-                  <p className="mt-4 text-[10px] text-gray-400 italic">
-                    You can add multiple job descriptions to compare your resume against different roles simultaneously.
-                  </p>
                 </div>
               </div>
 
-              {/* Right Column: Info & Action */}
-              <div className="space-y-6">
-                <div className="bg-brand-green rounded-2xl p-8 text-white relative overflow-hidden">
-                  <div className="relative z-10">
-                    <h2 className="text-2xl font-bold mb-4">Auriic Intelligence</h2>
-                    <p className="text-brand-white/80 mb-6 leading-relaxed">
-                      Our system uses strict STEM principles to evaluate candidates. 
-                      No score inflation. No bias. Just data-driven evidence.
-                    </p>
-                    <ul className="space-y-3 mb-8">
-                      {[
-                        'Evidence-based performance evaluation',
-                        'Technical stack depth analysis',
-                        'Career progression & role alignment',
-                        'US Corporate Compliance verification'
-                      ].map((item, i) => (
-                        <li key={i} className="flex items-center gap-2 text-sm text-brand-white/70">
-                          <CheckCircle2 size={16} className="text-brand-gold" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                    <button
-                      onClick={handleAnalyze}
-                      disabled={isAnalyzing}
-                      className="w-full py-4 bg-brand-gold text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                    >
-                      {isAnalyzing ? (
-                        <>
-                          <Loader2 className="animate-spin" size={20} />
-                          Analyzing {analysisProgress.current}/{analysisProgress.total} JDs...
-                        </>
-                      ) : (
-                        <>
-                          Run Auriic Analysis
-                          <ArrowRight size={20} />
-                        </>
-                      )}
-                    </button>
-                    {error && (
-                      <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-200 text-sm space-y-3">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                          <p>{error}</p>
-                        </div>
-                        {isQuotaExceeded && (
-                          <div className="pt-2 border-t border-red-500/20 flex flex-col gap-3">
-                            <p className="text-xs text-red-300/80">
-                              To avoid quota limits, you can use your own Google Cloud project's API key.
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={handleSelectKey}
-                                className="px-3 py-1.5 bg-white text-brand-green rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-brand-green/5 transition-colors"
-                              >
-                                <Key size={14} />
-                                Select My Own Key
-                              </button>
-                              <a 
-                                href="https://ai.google.dev/gemini-api/docs/billing" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="px-3 py-1.5 bg-brand-green/20 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-brand-green/30 transition-colors"
-                              >
-                                <ExternalLink size={14} />
-                                Billing Docs
-                              </a>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Resumes Column */}
+                <div className="space-y-6">
+                  <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-2">
+                        <FileText className="text-brand-green" size={20} />
+                        <h2 className="font-bold text-lg">Multiple Resumes</h2>
+                      </div>
+                      <button 
+                        onClick={addResume}
+                        className="px-3 py-1.5 bg-brand-green/10 text-brand-green rounded-xl hover:bg-brand-green/20 transition-colors flex items-center gap-1.5 text-xs font-bold"
+                      >
+                        <Plus size={14} /> Add Resume
+                      </button>
+                    </div>
+
+                    <div className="space-y-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      {resumes.map((resume, idx) => (
+                        <div key={resume.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-200 relative group">
+                          <div className="flex items-center justify-between mb-4">
+                            <input 
+                              type="text"
+                              value={resume.name}
+                              onChange={(e) => updateResume(resume.id, { name: e.target.value })}
+                              className="bg-transparent font-bold text-sm text-gray-900 border-none focus:ring-0 p-0 w-2/3"
+                            />
+                            <div className="flex items-center gap-2">
+                              {resumes.length > 1 && (
+                                <button 
+                                  onClick={() => removeResume(resume.id)}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </div>
                           </div>
-                        )}
-                      </div>
-                    )}
+
+                          <div 
+                            onClick={() => fileInputRefs.current[resume.id]?.click()}
+                            className="w-full h-32 border-2 border-dashed border-gray-200 bg-white rounded-xl flex flex-col items-center justify-center gap-2 hover:border-brand-gold hover:bg-brand-gold/5 transition-all cursor-pointer"
+                          >
+                            <input 
+                              type="file" 
+                              ref={el => fileInputRefs.current[resume.id] = el}
+                              className="hidden" 
+                              accept=".pdf" 
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) updateResume(resume.id, { file });
+                              }}
+                            />
+                            <Upload size={20} className="text-brand-gold" />
+                            <p className="text-[10px] font-bold text-gray-700 truncate max-w-[150px]">
+                              {resume.file ? resume.file.name : 'Upload PDF'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  {/* Decorative background element */}
-                  <div className="absolute -bottom-10 -right-10 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-brand-green mb-2"><Beaker size={24} /></div>
-                    <h3 className="font-bold text-sm">Science</h3>
-                    <p className="text-xs text-gray-500">Measurable KPIs & evidence-based impact.</p>
+                {/* JDs Column */}
+                <div className="space-y-6">
+                  <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="text-brand-green" size={20} />
+                        <h2 className="font-bold text-lg">Multiple Job Descriptions</h2>
+                      </div>
+                      <button 
+                        onClick={addJD}
+                        className="px-3 py-1.5 bg-brand-green/10 text-brand-green rounded-xl hover:bg-brand-green/20 transition-colors flex items-center gap-1.5 text-xs font-bold"
+                      >
+                        <Plus size={14} /> Add JD
+                      </button>
+                    </div>
+
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      {jobDescriptions.map((jd, index) => (
+                        <div key={index} className="relative group">
+                          <div className="absolute -left-3 top-4 w-6 h-6 bg-white rounded-full flex items-center justify-center text-[10px] font-bold text-gray-400 border border-gray-200 shadow-sm z-10">
+                            {index + 1}
+                          </div>
+                          <textarea
+                            className="w-full h-32 p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all resize-none text-xs font-mono"
+                            placeholder={`Paste job description #${index + 1}...`}
+                            value={jd}
+                            onChange={(e) => updateJD(index, e.target.value)}
+                          />
+                          {jobDescriptions.length > 1 && (
+                            <button 
+                              onClick={() => removeJD(index)}
+                              className="absolute top-3 right-3 p-1.5 bg-white/90 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 shadow-sm border border-red-100"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-brand-green mb-2"><Cpu size={24} /></div>
-                    <h3 className="font-bold text-sm">Technology</h3>
-                    <p className="text-xs text-gray-500">Hard skill depth & modern stack relevance.</p>
-                  </div>
-                  <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-brand-green mb-2"><Scale size={24} /></div>
-                    <h3 className="font-bold text-sm">Engineering</h3>
-                    <p className="text-xs text-gray-500">System design & career progression.</p>
-                  </div>
-                  <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                    <div className="text-brand-green mb-2"><Calculator size={24} /></div>
-                    <h3 className="font-bold text-sm">Mathematics</h3>
-                    <p className="text-xs text-gray-500">Weighted scoring & statistical matching.</p>
+
+                  {/* Action Card */}
+                  <div className="bg-brand-green rounded-3xl p-8 text-white relative overflow-hidden shadow-xl">
+                    <div className="relative z-10">
+                      <h3 className="text-xl font-bold mb-2">Auriic Intelligence</h3>
+                      <p className="text-brand-white/70 text-sm mb-6">
+                        Analyzing {resumes.length} resumes against {jobDescriptions.length} job descriptions in the <span className="text-brand-gold font-bold">{domain}</span> domain.
+                      </p>
+                      
+                      <button
+                        onClick={handleAnalyze}
+                        disabled={isAnalyzing}
+                        className="w-full py-4 bg-brand-gold text-white rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-brand-gold/90 transition-all disabled:opacity-50 shadow-lg active:scale-[0.98]"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="animate-spin" size={20} />
+                            Processing {analysisProgress.current}/{analysisProgress.total}
+                          </>
+                        ) : (
+                          <>
+                            Start Cross-Analysis
+                            <ArrowRight size={20} />
+                          </>
+                        )}
+                      </button>
+
+                      {isAnalyzing && (
+                        <div className="mt-6 space-y-3">
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-brand-white/80">
+                            <span>Progress</span>
+                            <span>{Math.round((analysisProgress.current / analysisProgress.total) * 100)}%</span>
+                          </div>
+                          <div className="h-2 w-full bg-white/20 rounded-full overflow-hidden">
+                            <motion.div 
+                              className="h-full bg-white"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }}
+                              transition={{ type: 'spring', bounce: 0, duration: 0.5 }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-brand-white/80">
+                            <div className="flex items-center gap-1.5">
+                              <Activity size={10} />
+                              <span>Time Elapsed: {elapsedTime}s</span>
+                            </div>
+                            {analysisProgress.current > 0 && (
+                              <span>Est. Remaining: {Math.max(0, Math.round((elapsedTime / analysisProgress.current) * (analysisProgress.total - analysisProgress.current)))}s</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {error && (
+                        <div className="mt-4 p-4 bg-red-500/20 border border-red-500/30 rounded-2xl text-red-100 text-xs flex items-start gap-2">
+                          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                          <p>{error}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
                   </div>
                 </div>
               </div>
@@ -424,46 +543,75 @@ export default function App() {
               className="space-y-8 pb-20"
             >
               {/* Results Navigation Bar */}
-              <div className="flex flex-col md:flex-row gap-4">
-                {/* Back Button & Title */}
-                <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex-1">
-                  <button 
-                    onClick={reset}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <div>
-                    <h2 className="font-bold text-lg">Auriic Intelligence Report</h2>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
-                      {results.length} Job Descriptions Analyzed
-                    </p>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  {/* Back Button & Title */}
+                  <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex-1">
+                    <button 
+                      onClick={reset}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <div>
+                      <h2 className="font-bold text-lg">Auriic Intelligence Report</h2>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                        Domain: {domain} • {resumeResults.length} Resumes • {jobDescriptions.length} JDs
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* JD Selector */}
-                <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-gray-200 shadow-sm overflow-x-auto no-scrollbar max-w-full md:max-w-[60%]">
-                  {results.map((res, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedResultIndex(idx)}
-                      className={cn(
-                        "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border",
-                        selectedResultIndex === idx 
-                          ? (res.requires_us_clearance_or_citizenship ? "bg-red-600 text-white border-red-700 shadow-md scale-105" : "bg-brand-green text-white border-brand-green shadow-md")
-                          : (res.requires_us_clearance_or_citizenship ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" : "bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100")
-                      )}
-                    >
-                      <LayoutDashboard size={14} />
-                      JD #{idx + 1}
-                      {res.requires_us_clearance_or_citizenship && <ShieldCheck size={12} className="ml-1" />}
-                    </button>
-                  ))}
+                {/* Selectors Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Resume Selector */}
+                  <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm space-y-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Select Resume</p>
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                      {resumeResults.map((res, idx) => (
+                        <button
+                          key={res.resumeId}
+                          onClick={() => setSelectedResumeIndex(idx)}
+                          className={cn(
+                            "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 border",
+                            selectedResumeIndex === idx 
+                              ? "bg-brand-green text-white border-brand-green shadow-md scale-105"
+                              : "bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100"
+                          )}
+                        >
+                          {res.resumeName}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* JD Selector */}
+                  <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm space-y-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Select Job Description</p>
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                      {resumeResults[selectedResumeIndex]?.jdResults.map((jdRes, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedJDIndex(idx)}
+                          className={cn(
+                            "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border",
+                            selectedJDIndex === idx 
+                              ? (jdRes.requires_us_clearance_or_citizenship ? "bg-red-600 text-white border-red-700 shadow-md scale-105" : "bg-brand-green text-white border-brand-green shadow-md")
+                              : (jdRes.requires_us_clearance_or_citizenship ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" : "bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100")
+                          )}
+                        >
+                          <LayoutDashboard size={14} />
+                          JD #{idx + 1}
+                          {jdRes.requires_us_clearance_or_citizenship && <ShieldCheck size={12} className="ml-1" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {(() => {
-                const result = results[selectedResultIndex];
+                const result = resumeResults[selectedResumeIndex]?.jdResults[selectedJDIndex];
                 if (!result) return null;
                 
                 return (
@@ -515,10 +663,16 @@ export default function App() {
                             "font-bold text-lg",
                             result.requires_us_clearance_or_citizenship ? "text-red-900" : "text-gray-900"
                           )}>
-                            Analysis for Job Description #{selectedResultIndex + 1}
+                            Analysis for {resumeResults[selectedResumeIndex]?.resumeName} vs JD #{selectedJDIndex + 1}
                           </h3>
-                          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
+                          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold flex items-center gap-2">
                             Mode: {result.mode === 'with_jd' ? 'Weighted Match' : 'Independent Evaluation'}
+                            {result.engine && (
+                              <>
+                                <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                                <span className="text-brand-gold">Engine: {result.engine.toUpperCase()}</span>
+                              </>
+                            )}
                           </p>
                         </div>
                       </div>

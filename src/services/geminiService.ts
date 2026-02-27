@@ -141,6 +141,7 @@ Be analytical. Be strict. Be evidence-based. Do not include explanations outside
 
 export interface ATSResult {
   mode: "with_jd" | "without_jd";
+  engine?: "gemini" | "openai" | "claude";
   ats_score: number;
   keyword_match_percentage: number | null;
   jd_skills: string[];
@@ -178,9 +179,36 @@ export interface ATSResult {
 
 export async function analyzeResume(
   resumeSource: { text?: string; pdfBase64?: string },
-  jobDescription?: string
+  jobDescription?: string,
+  engine: "gemini" | "openai" | "claude" = "gemini",
+  userApiKey?: string
 ): Promise<ATSResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  if (engine === "openai" || engine === "claude") {
+    // OpenAI and Claude must go through the backend to protect the key (or use user provided key)
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: resumeSource.text,
+        pdfBase64: resumeSource.pdfBase64,
+        jobDescription,
+        engine,
+        userApiKey
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to analyze resume with OpenAI");
+    }
+
+    return await response.json();
+  }
+
+  // Gemini Path (Frontend as per instructions)
+  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
   const genAI = new GoogleGenAI({ apiKey });
@@ -229,5 +257,7 @@ export async function analyzeResume(
   const text = response.text;
   if (!text) throw new Error("No response from AI");
 
-  return JSON.parse(text) as ATSResult;
+  const result = JSON.parse(text) as ATSResult;
+  result.engine = "gemini";
+  return result;
 }

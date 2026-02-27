@@ -6,6 +6,8 @@ const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse");
 import crypto from "crypto-js";
 import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import dotenv from "dotenv";
 import path from "path";
 
@@ -14,7 +16,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-// Gemini Setup
+// Shared System Instruction
 const SYSTEM_INSTRUCTION = `You are an enterprise-level Applicant Tracking System (ATS) designed using official STEM principles:
 
 STEM stands for:
@@ -162,7 +164,7 @@ app.use(express.json({ limit: '50mb' }));
 // API Routes
 app.post("/api/analyze", upload.single("resume"), async (req, res) => {
   try {
-    const { text, jobDescription } = req.body;
+    const { text, jobDescription, engine = "gemini", userApiKey } = req.body;
     let resumeContent = "";
     let resumeBuffer: Buffer | null = null;
 
@@ -177,62 +179,112 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
       return res.status(400).json({ error: "No resume content provided" });
     }
 
-    // Hash the resume content to ensure uniqueness
-    // We use the raw text for hashing to be consistent
-    const hash = crypto.SHA256(resumeContent).toString();
+    if (engine === "openai") {
+      const apiKey = userApiKey || process.env.OPENAI_API_KEY;
+      if (!apiKey) throw new Error("OPENAI_API_KEY is not set.");
 
-    // Call Gemini
-    const userApiKey = req.body.userApiKey;
-    const apiKey = userApiKey || process.env.GEMINI_API_KEY;
-    
-    if (!apiKey) throw new Error("GEMINI_API_KEY is not set. Please set it in the Secrets panel.");
-    
-    if (apiKey === "MY_GEMINI_API_KEY") {
-      throw new Error("Invalid API Key: You are still using the placeholder 'MY_GEMINI_API_KEY'. Please update it in the Secrets panel.");
-    }
+      const openai = new OpenAI({ apiKey });
+      const prompt = `
+        ${SYSTEM_INSTRUCTION}
+        
+        RESUME CONTENT:
+        ${resumeContent}
+        
+        ${jobDescription ? `JOB DESCRIPTION:\n${jobDescription}` : "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently."}
+      `;
 
-    console.log(`Analyzing resume... (Using API Key starting with: ${apiKey.substring(0, 4)}...)`);
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: SYSTEM_INSTRUCTION },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0,
+      });
 
-    const ai = new GoogleGenAI({ apiKey });
-    const model = "gemini-3-flash-preview";
+      const resultText = completion.choices[0].message.content;
+      if (!resultText) throw new Error("No response from OpenAI");
+      const result = JSON.parse(resultText);
+      result.engine = "openai";
+      return res.json(result);
+    } else if (engine === "claude") {
+      const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
 
-    const parts: any[] = [];
-    if (resumeBuffer) {
-      parts.push({
-        inlineData: {
-          mimeType: "application/pdf",
-          data: resumeBuffer.toString("base64"),
+      const anthropic = new Anthropic({ apiKey });
+      const prompt = `
+        ${SYSTEM_INSTRUCTION}
+        
+        RESUME CONTENT:
+        ${resumeContent}
+        
+        ${jobDescription ? `JOB DESCRIPTION:\n${jobDescription}` : "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently."}
+        
+        IMPORTANT: Return ONLY valid JSON.
+      `;
+
+      const msg = await anthropic.messages.create({
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 4096,
+        system: SYSTEM_INSTRUCTION,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+      });
+
+      const resultText = msg.content[0].type === 'text' ? msg.content[0].text : '';
+      if (!resultText) throw new Error("No response from Claude");
+      
+      // Claude might wrap JSON in markdown blocks
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+      const cleanedJson = jsonMatch ? jsonMatch[0] : resultText;
+      
+      const result = JSON.parse(cleanedJson);
+      result.engine = "claude";
+      return res.json(result);
+    } else {
+      // Gemini Path
+      const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
+
+      const ai = new GoogleGenAI({ apiKey });
+      const model = "gemini-3-flash-preview";
+
+      const parts: any[] = [];
+      if (resumeBuffer) {
+        parts.push({
+          inlineData: {
+            mimeType: "application/pdf",
+            data: resumeBuffer.toString("base64"),
+          },
+        });
+        parts.push({
+          text: "Analyze the attached resume PDF based on the STEM principles provided in your system instructions.",
+        });
+      } else {
+        parts.push({ text: `RESUME CONTENT:\n${resumeContent}` });
+      }
+
+      if (jobDescription) {
+        parts.push({ text: `JOB DESCRIPTION:\n${jobDescription}` });
+      } else {
+        parts.push({ text: "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently." });
+      }
+
+      const aiResponse = await ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: "application/json",
+          temperature: 0,
         },
       });
-      parts.push({
-        text: "Analyze the attached resume PDF based on the STEM principles provided in your system instructions.",
-      });
-    } else {
-      parts.push({ text: `RESUME CONTENT:\n${resumeContent}` });
+
+      const resultText = aiResponse.text;
+      if (!resultText) throw new Error("No response from AI");
+      return res.json(JSON.parse(resultText));
     }
-
-    if (jobDescription) {
-      parts.push({ text: `JOB DESCRIPTION:\n${jobDescription}` });
-    } else {
-      parts.push({ text: "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently." });
-    }
-
-    const aiResponse = await ai.models.generateContent({
-      model,
-      contents: [{ role: "user", parts }],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        temperature: 0,
-      },
-    });
-
-    const resultText = aiResponse.text;
-    if (!resultText) throw new Error("No response from AI");
-
-    const result = JSON.parse(resultText);
-
-    res.json(result);
   } catch (err: any) {
     console.error("Analysis error:", err);
     res.status(500).json({ error: err.message || "Internal server error" });
