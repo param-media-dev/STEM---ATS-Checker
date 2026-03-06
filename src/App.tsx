@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileText, 
   Search, 
@@ -22,7 +22,6 @@ import {
   Briefcase,
   GraduationCap,
   Scale,
-  Key,
   ExternalLink,
   Users,
   BookOpen,
@@ -30,20 +29,26 @@ import {
   Trash2,
   ChevronLeft,
   LayoutDashboard,
-  Activity,
   Code,
   Truck,
   LineChart,
   Database,
   Stethoscope,
   Box,
-  TrendingUp
+  TrendingUp,
+  LogIn,
+  LogOut,
+  Crown,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeResume, ATSResult } from './services/geminiService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { auth, db, signInWithGoogle, logout, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from './firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, updateDoc } from 'firebase/firestore';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -66,6 +71,22 @@ type ResumeResult = {
 type Domain = 'Healthcare' | 'IT' | 'Supply Chain' | 'Business Analytics';
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [isPro, setIsPro] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [showProModal, setShowProModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
+
   const [step, setStep] = useState<0 | 1 | 2>(0); // 0: Domain, 1: Upload, 2: Results
   const [domain, setDomain] = useState<Domain | null>(null);
   const [resumes, setResumes] = useState<ResumeEntry[]>([
@@ -74,8 +95,6 @@ export default function App() {
   const [jobDescriptions, setJobDescriptions] = useState<string[]>(['']);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
-  const [startTime, setStartTime] = useState<number | null>(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
   const [resumeResults, setResumeResults] = useState<ResumeResult[]>([]);
   const [selectedResumeIndex, setSelectedResumeIndex] = useState<number>(0);
   const [selectedJDIndex, setSelectedJDIndex] = useState<number>(0);
@@ -83,28 +102,138 @@ export default function App() {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
-  React.useEffect(() => {
-    let interval: any;
-    if (isAnalyzing && startTime) {
-      interval = setInterval(() => {
-        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
-      }, 1000);
-    } else {
-      setElapsedTime(0);
-    }
-    return () => clearInterval(interval);
-  }, [isAnalyzing, startTime]);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setUser(user);
+      if (user) {
+        // Check if user is paramatwork3076@gmail.com (Default Pro)
+        const isUserAdmin = user.email === 'paramatwork3076@gmail.com';
+        setIsAdmin(isUserAdmin);
+        
+        // Sync user to Firestore
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (!userDoc.exists()) {
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            isPro: isUserAdmin,
+            createdAt: serverTimestamp()
+          });
+          setIsPro(isUserAdmin);
+        } else {
+          const data = userDoc.data();
+          // If admin, ensure isPro is true in DB too if it wasn't
+          if (isUserAdmin && !data.isPro) {
+            await setDoc(userRef, { isPro: true }, { merge: true });
+            setIsPro(true);
+          } else {
+            // Check if Pro is still valid based on proUntil
+            const now = new Date();
+            const proUntil = data.proUntil ? new Date(data.proUntil) : null;
+            const isProValid = !!data.isPro && (!proUntil || proUntil > now);
+            setIsPro(isProValid);
+          }
+        }
+      } else {
+        setIsPro(false);
+        setIsAdmin(false);
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
-  const handleSelectKey = async () => {
+  const handleLogin = async () => {
+    setShowAuthModal(true);
+  };
+
+  const handleManualAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
     try {
-      // @ts-ignore
-      await window.aistudio.openSelectKey();
-      setIsQuotaExceeded(false);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to open key selector:', err);
+      if (authMode === 'signup') {
+        const userCredential = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        await updateProfile(userCredential.user, { displayName: authName });
+        // Profile sync happens in onAuthStateChanged
+      } else {
+        await signInWithEmailAndPassword(auth, authEmail, authPassword);
+      }
+      setShowAuthModal(false);
+      setAuthEmail('');
+      setAuthPassword('');
+      setAuthName('');
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed');
     }
   };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle();
+      setShowAuthModal(false);
+    } catch (err) {
+      console.error('Login failed:', err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      reset();
+      setShowAdminDashboard(false);
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  };
+
+  const fetchUsers = async () => {
+    if (!isAdmin) return;
+    setIsAdminLoading(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'users'));
+      const users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsersList(users);
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+    } finally {
+      setIsAdminLoading(false);
+    }
+  };
+
+  const toggleUserPro = async (userId: string, currentProStatus: boolean) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      // Default to 1 month if enabling
+      const proUntil = !currentProStatus ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
+      await updateDoc(userRef, { 
+        isPro: !currentProStatus,
+        proUntil: proUntil
+      });
+      setUsersList(usersList.map(u => u.id === userId ? { ...u, isPro: !currentProStatus, proUntil: proUntil } : u));
+    } catch (err) {
+      console.error('Failed to update user Pro status:', err);
+    }
+  };
+
+  const updateUserProUntil = async (userId: string, date: string) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, { proUntil: date });
+      setUsersList(usersList.map(u => u.id === userId ? { ...u, proUntil: date } : u));
+    } catch (err) {
+      console.error('Failed to update user Pro expiration:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (showAdminDashboard) {
+      fetchUsers();
+    }
+  }, [showAdminDashboard]);
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -119,6 +248,10 @@ export default function App() {
   };
 
   const addResume = () => {
+    if (!isPro && resumes.length >= 1) {
+      setShowProModal(true);
+      return;
+    }
     setResumes([...resumes, { id: crypto.randomUUID(), name: `Resume ${resumes.length + 1}`, mode: 'text', text: '', file: null }]);
   };
 
@@ -148,25 +281,14 @@ export default function App() {
     setIsAnalyzing(true);
     setError(null);
     setIsQuotaExceeded(false);
-    setStartTime(Date.now());
-    setElapsedTime(0);
     const totalTasks = activeResumes.length * activeJDs.length;
     setAnalysisProgress({ current: 0, total: totalTasks });
     
     try {
       const allResumeResults: ResumeResult[] = [];
-      let completedTasks = 0;
+      let taskCount = 0;
 
-      // Prepare all tasks
-      const tasks = [];
       for (const resume of activeResumes) {
-        for (const jd of activeJDs) {
-          tasks.push({ resume, jd });
-        }
-      }
-
-      // Process all tasks in parallel
-      const results = await Promise.all(activeResumes.map(async (resume) => {
         const jdResults: ATSResult[] = [];
         let resumeSource: { text?: string; pdfBase64?: string } = {};
 
@@ -177,50 +299,30 @@ export default function App() {
           resumeSource = { text: resume.text };
         }
 
-        // Run JD analyses for this resume in parallel
-        const resumeJdResults = await Promise.all(activeJDs.map(async (jd, jdIdx) => {
-          let result: ATSResult | null = null;
-          let lastError: any = null;
-
-          // Determine starting engine based on a combination of resume and JD index to spread load
-          const taskIndex = activeResumes.indexOf(resume) * activeJDs.length + jdIdx;
-          const engines: ('gemini' | 'openai')[] = taskIndex % 2 === 0 ? ['gemini', 'openai'] : ['openai', 'gemini'];
-
-          for (const currentEngine of engines) {
-            try {
-              result = await analyzeResume(resumeSource, jd, currentEngine);
-              if (result) break;
-            } catch (err: any) {
-              lastError = err;
-              const errorMessage = err.message || '';
-              if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota') || errorMessage.includes('limit')) {
-                continue; 
-              }
-              continue;
-            }
-          }
-
-          if (!result) {
-            if (lastError?.message?.includes('429') || lastError?.message?.includes('RESOURCE_EXHAUSTED')) {
+        for (const jd of activeJDs) {
+          try {
+            const result = await analyzeResume(resumeSource, jd);
+            jdResults.push(result);
+          } catch (err: any) {
+            const errorMessage = err.message || '';
+            if (errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota')) {
               setIsQuotaExceeded(true);
-              throw new Error('API Quota Exceeded on both engines. Please wait a moment.');
+              throw new Error('API Quota Exceeded. The free tier has strict limits. Please wait a moment or use your own API key for higher limits.');
             }
-            throw lastError || new Error('Analysis failed on all available engines.');
+            throw err;
           }
+          taskCount++;
+          setAnalysisProgress({ current: taskCount, total: totalTasks });
+        }
 
-          completedTasks++;
-          setAnalysisProgress(prev => ({ ...prev, current: completedTasks }));
-          return result;
-        }));
-
-        return {
+        allResumeResults.push({
           resumeId: resume.id,
           resumeName: resume.name,
-          jdResults: resumeJdResults
-        };
-      }));
+          jdResults
+        });
+      }
 
-      setResumeResults(results);
+      setResumeResults(allResumeResults);
       setSelectedResumeIndex(0);
       setSelectedJDIndex(0);
       setStep(2);
@@ -231,7 +333,6 @@ export default function App() {
       }
     } finally {
       setIsAnalyzing(false);
-      setStartTime(null);
     }
   };
 
@@ -245,6 +346,10 @@ export default function App() {
   };
 
   const addJD = () => {
+    if (!isPro && jobDescriptions.length >= 1) {
+      setShowProModal(true);
+      return;
+    }
     setJobDescriptions([...jobDescriptions, '']);
   };
 
@@ -268,33 +373,177 @@ export default function App() {
       <header className="border-b border-gray-200 bg-white sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-green rounded-lg flex items-center justify-center text-white">
-              <ShieldCheck size={20} />
+            <img 
+              src="https://i.ibb.co/v6Y7f1H/logo.png" 
+              alt="Auriic Logo" 
+              className="h-10 w-auto" 
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                // Fallback if logo fails to load
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="hidden flex items-center gap-2">
+              <div className="w-8 h-8 bg-brand-green rounded-lg flex items-center justify-center text-white">
+                <ShieldCheck size={20} />
+              </div>
+              <h1 className="text-xl font-bold tracking-tight text-gray-900">
+                Auriic<span className="text-brand-gold">ATS</span>
+              </h1>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">
-              Auriic<span className="text-brand-gold">ATS</span>
-            </h1>
+            {isPro && (
+              <div className="flex items-center gap-1 bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border border-brand-gold/20">
+                <Crown size={10} />
+                PRO
+              </div>
+            )}
+            {isAdmin && (
+              <button 
+                onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border transition-all",
+                  showAdminDashboard 
+                    ? "bg-brand-green text-white border-brand-green" 
+                    : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200"
+                )}
+              >
+                <ShieldCheck size={10} />
+                Admin
+              </button>
+            )}
           </div>
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
-            <span className="flex items-center gap-1.5"><Beaker size={14} /> Science</span>
-            <span className="flex items-center gap-1.5"><Cpu size={14} /> Tech</span>
-            <span className="flex items-center gap-1.5"><Scale size={14} /> Engineering</span>
-            <span className="flex items-center gap-1.5"><Calculator size={14} /> Math</span>
-            <button 
-              onClick={handleSelectKey}
-              className="ml-4 p-2 hover:bg-brand-green/5 text-brand-green rounded-lg transition-colors flex items-center gap-2 border border-brand-green/20"
-              title="Select API Key"
-            >
-              <Key size={16} />
-              <span className="text-xs font-bold">API Key</span>
-            </button>
+          
+          <div className="flex items-center gap-4">
+            <div className="h-8 w-px bg-gray-200 mx-2 hidden sm:block" />
+
+            {isAuthLoading ? (
+              <div className="w-8 h-8 rounded-full bg-gray-100 animate-pulse" />
+            ) : user ? (
+              <div className="flex items-center gap-3">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-bold text-gray-900">{user.displayName}</p>
+                  <p className="text-[10px] text-gray-400 font-medium">{user.email}</p>
+                </div>
+                <button onClick={handleLogout} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors" title="Logout">
+                  <LogOut size={18} />
+                </button>
+                <img src={user.photoURL || ''} alt={user.displayName || ''} className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
+              </div>
+            ) : (
+              <button 
+                onClick={handleLogin}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-green text-white rounded-xl text-sm font-bold hover:bg-brand-green/90 transition-all shadow-sm"
+              >
+                <LogIn size={18} />
+                Login
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
-          {step === 0 ? (
+          {showAdminDashboard && isAdmin ? (
+            <motion.div
+              key="admin-dashboard"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-8"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900 tracking-tight">Admin Dashboard</h2>
+                  <p className="text-gray-500">Manage user Pro subscriptions.</p>
+                </div>
+                <button 
+                  onClick={() => setShowAdminDashboard(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+              </div>
+
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                  <h3 className="font-bold text-gray-900">User Management</h3>
+                  <button 
+                    onClick={fetchUsers}
+                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors text-gray-500"
+                    disabled={isAdminLoading}
+                  >
+                    <Loader2 className={cn("w-5 h-5", isAdminLoading && "animate-spin")} />
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50/50">
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">User</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Expires</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {usersList.map((u) => (
+                        <tr key={u.id} className="hover:bg-gray-50/30 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <img src={u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.displayName || 'User')}`} alt={u.displayName} className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
+                              <span className="text-sm font-bold text-gray-900">{u.displayName || 'Anonymous'}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
+                          <td className="px-6 py-4">
+                            {u.isPro ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-gold/10 text-brand-gold rounded-full text-[10px] font-black border border-brand-gold/20">
+                                <Crown size={10} /> PRO
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full text-[10px] font-black border border-gray-200">
+                                FREE
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            {u.isPro && u.email !== 'paramatwork3076@gmail.com' ? (
+                              <input 
+                                type="date" 
+                                value={u.proUntil ? u.proUntil.split('T')[0] : ''} 
+                                onChange={(e) => updateUserProUntil(u.id, new Date(e.target.value).toISOString())}
+                                className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-brand-green outline-none"
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {u.email !== 'paramatwork3076@gmail.com' && (
+                              <button 
+                                onClick={() => toggleUserPro(u.id, u.isPro)}
+                                className={cn(
+                                  "px-4 py-1.5 rounded-xl text-xs font-bold transition-all border",
+                                  u.isPro 
+                                    ? "bg-red-50 text-red-600 border-red-100 hover:bg-red-100" 
+                                    : "bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green/20"
+                                )}
+                              >
+                                {u.isPro ? 'Downgrade' : 'Upgrade to Pro'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          ) : step === 0 ? (
             <motion.div
               key="domain-selection"
               initial={{ opacity: 0, y: 20 }}
@@ -302,9 +551,17 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="max-w-4xl mx-auto space-y-8"
             >
-              <div className="text-center space-y-4">
-                <h2 className="text-4xl font-black text-gray-900 tracking-tight">Select Your Domain</h2>
-                <p className="text-gray-500 text-lg">Choose the industry domain to tailor the Auriic Intelligence analysis.</p>
+              <div className="text-center space-y-6">
+                <img 
+                  src="https://i.ibb.co/v6Y7f1H/logo.png" 
+                  alt="Auriic Logo" 
+                  className="h-20 w-auto mx-auto mb-4" 
+                  referrerPolicy="no-referrer"
+                />
+                <div className="space-y-2">
+                  <h2 className="text-4xl font-black text-gray-900 tracking-tight">Select Your Domain</h2>
+                  <p className="text-gray-500 text-lg">Choose the industry domain to tailor the Auriic Intelligence analysis.</p>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -523,32 +780,6 @@ export default function App() {
                           </>
                         )}
                       </button>
-
-                      {isAnalyzing && (
-                        <div className="mt-6 space-y-3">
-                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-brand-white/80">
-                            <span>Progress</span>
-                            <span>{Math.round((analysisProgress.current / analysisProgress.total) * 100)}%</span>
-                          </div>
-                          <div className="h-2 w-full bg-white/20 rounded-full overflow-hidden">
-                            <motion.div 
-                              className="h-full bg-white"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }}
-                              transition={{ type: 'spring', bounce: 0, duration: 0.5 }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-brand-white/80">
-                            <div className="flex items-center gap-1.5">
-                              <Activity size={10} />
-                              <span>Time Elapsed: {elapsedTime}s</span>
-                            </div>
-                            {analysisProgress.current > 0 && (
-                              <span>Est. Remaining: {Math.max(0, Math.round((elapsedTime / analysisProgress.current) * (analysisProgress.total - analysisProgress.current)))}s</span>
-                            )}
-                          </div>
-                        </div>
-                      )}
 
                       {error && (
                         <div className="mt-4 p-4 bg-red-500/20 border border-red-500/30 rounded-2xl text-red-100 text-xs flex items-start gap-2">
@@ -1280,12 +1511,187 @@ export default function App() {
         </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Pro Upgrade Modal */}
+        <AnimatePresence>
+          {showProModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowProModal(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 text-center space-y-6"
+              >
+                <div className="w-20 h-20 bg-brand-gold/10 text-brand-gold rounded-full flex items-center justify-center mx-auto">
+                  <Crown size={40} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-gray-900">Upgrade to Pro Plan</h3>
+                  <p className="text-gray-500">
+                    Unlock multi-resume and multi-JD analysis. Free users are limited to a single comparison.
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-2xl space-y-3 text-left">
+                  <div className="flex items-center gap-3 text-sm font-bold text-gray-700">
+                    <CheckCircle2 className="text-brand-green" size={18} />
+                    Unlimited Resumes
+                  </div>
+                  <div className="flex items-center gap-3 text-sm font-bold text-gray-700">
+                    <CheckCircle2 className="text-brand-green" size={18} />
+                    Unlimited Job Descriptions
+                  </div>
+                  <div className="flex items-center gap-3 text-sm font-bold text-gray-700">
+                    <CheckCircle2 className="text-brand-green" size={18} />
+                    Advanced Recruiter Simulation
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowProModal(false)}
+                  className="w-full py-4 bg-brand-green text-white rounded-2xl font-black shadow-lg hover:bg-brand-green/90 transition-all"
+                >
+                  View Pricing
+                </button>
+                <button 
+                  onClick={() => setShowProModal(false)}
+                  className="text-xs font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Maybe Later
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        {/* Auth Modal */}
+        <AnimatePresence>
+          {showAuthModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowAuthModal(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 space-y-6"
+              >
+                <div className="text-center space-y-4">
+                  <img 
+                    src="https://i.ibb.co/v6Y7f1H/logo.png" 
+                    alt="Auriic Logo" 
+                    className="h-12 w-auto mx-auto mb-2" 
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-black text-gray-900">
+                      {authMode === 'login' ? 'Welcome Back' : 'Create Account'}
+                    </h3>
+                    <p className="text-gray-500 text-sm">
+                      {authMode === 'login' ? 'Login to access your resumes' : 'Join Auriic Intelligence today'}
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleManualAuth} className="space-y-4">
+                  {authMode === 'signup' && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={authName}
+                        onChange={(e) => setAuthName(e.target.value)}
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green outline-none transition-all"
+                        placeholder="John Doe"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                    <input 
+                      type="email" 
+                      required
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green outline-none transition-all"
+                      placeholder="name@example.com"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Password</label>
+                    <input 
+                      type="password" 
+                      required
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-green outline-none transition-all"
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  {authError && (
+                    <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-[10px] font-bold flex items-center gap-2">
+                      <AlertCircle size={14} />
+                      {authError}
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit"
+                    className="w-full py-4 bg-brand-green text-white rounded-2xl font-black shadow-lg hover:bg-brand-green/90 transition-all"
+                  >
+                    {authMode === 'login' ? 'Login' : 'Sign Up'}
+                  </button>
+                </form>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+                  <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest"><span className="bg-white px-2 text-gray-400">Or continue with</span></div>
+                </div>
+
+                <button 
+                  onClick={handleGoogleLogin}
+                  className="w-full py-4 bg-white border border-gray-200 text-gray-700 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 transition-all shadow-sm"
+                >
+                  <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+                  Google Account
+                </button>
+
+                <p className="text-center text-xs font-bold text-gray-500">
+                  {authMode === 'login' ? "Don't have an account?" : "Already have an account?"}
+                  <button 
+                    onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
+                    className="ml-1 text-brand-green hover:underline"
+                  >
+                    {authMode === 'login' ? 'Sign Up' : 'Login'}
+                  </button>
+                </p>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 py-8 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-xs text-gray-400 font-mono uppercase tracking-widest">
-            Auriic ATS v1.2.0 // Enterprise Intelligence Engine // Analytical Mode Active
+      <footer className="bg-white border-t border-gray-200 py-12 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 text-center space-y-4">
+          <img 
+            src="https://i.ibb.co/v6Y7f1H/logo.png" 
+            alt="Auriic Logo" 
+            className="h-12 w-auto mx-auto opacity-80" 
+            referrerPolicy="no-referrer"
+          />
+          <p className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">
+            Connecting Ambitions With Opportunities
           </p>
         </div>
       </footer>

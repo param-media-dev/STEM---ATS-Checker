@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const SYSTEM_INSTRUCTION = `You are an enterprise-level Applicant Tracking System (ATS) designed using official STEM principles:
 
@@ -178,36 +178,10 @@ export interface ATSResult {
 
 export async function analyzeResume(
   resumeSource: { text?: string; pdfBase64?: string },
-  jobDescription?: string,
-  engine: "gemini" | "openai" = "gemini",
-  userApiKey?: string
+  jobDescription?: string
 ): Promise<ATSResult> {
-  if (engine === "openai") {
-    // OpenAI must go through the backend to protect the key (or use user provided key)
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: resumeSource.text,
-        pdfBase64: resumeSource.pdfBase64,
-        jobDescription,
-        engine: "openai",
-        userApiKey
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to analyze resume with OpenAI");
-    }
-
-    return await response.json();
-  }
-
   // Gemini Path (Frontend as per instructions)
-  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
   const genAI = new GoogleGenAI({ apiKey });
