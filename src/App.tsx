@@ -374,7 +374,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img 
-              src="https://i.ibb.co/v6Y7f1H/logo.png" 
+              src="https://auriic.co/wp-content/uploads/2026/03/Auriic_Logo-_1_-2-1.svg" 
               alt="Auriic Logo" 
               className="h-10 w-auto" 
               referrerPolicy="no-referrer"
@@ -553,7 +553,7 @@ export default function App() {
             >
               <div className="text-center space-y-6">
                 <img 
-                  src="https://i.ibb.co/v6Y7f1H/logo.png" 
+                  src="https://auriic.co/wp-content/uploads/2026/03/Auriic_Logo-_1_-2-1.svg" 
                   alt="Auriic Logo" 
                   className="h-20 w-auto mx-auto mb-4" 
                   referrerPolicy="no-referrer"
@@ -1587,7 +1587,7 @@ export default function App() {
               >
                 <div className="text-center space-y-4">
                   <img 
-                    src="https://i.ibb.co/v6Y7f1H/logo.png" 
+                    src="https://auriic.co/wp-content/uploads/2026/03/Auriic_Logo-_1_-2-1.svg" 
                     alt="Auriic Logo" 
                     className="h-12 w-auto mx-auto mb-2" 
                     referrerPolicy="no-referrer"
@@ -1685,7 +1685,7 @@ export default function App() {
       <footer className="bg-white border-t border-gray-200 py-12 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center space-y-4">
           <img 
-            src="https://i.ibb.co/v6Y7f1H/logo.png" 
+            src="https://auriic.co/wp-content/uploads/2026/03/Auriic_Logo-_1_-2-1.svg" 
             alt="Auriic Logo" 
             className="h-12 w-auto mx-auto opacity-80" 
             referrerPolicy="no-referrer"
