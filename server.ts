@@ -10,8 +10,20 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import dotenv from "dotenv";
 import path from "path";
+import admin from "firebase-admin";
 
 dotenv.config();
+
+// Initialize Firebase Admin
+let db: admin.firestore.Firestore | null = null;
+try {
+  admin.initializeApp({
+    projectId: "gen-lang-client-0103663216"
+  });
+  db = admin.firestore();
+} catch (err) {
+  console.error("Firebase admin init failed:", err);
+}
 
 const app = express();
 const PORT = 3000;
@@ -161,10 +173,86 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json({ limit: '50mb' }));
 
+// External API Config
+const EXTERNAL_API_BASE = "https://test-wp.param.club/wp-json/file-api/v1";
+
+// Helper to save analysis to External API
+async function saveToExternalApi(data: any) {
+  try {
+    const response = await fetch(`${EXTERNAL_API_BASE}/upload`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: data.fileName || `Analysis_${Date.now()}`,
+        content: JSON.stringify({
+          resumeText: data.resumeText,
+          jobDescription: data.jobDescription,
+          result: data.result,
+          domain: data.domain,
+          uid: data.uid
+        }),
+        status: 'publish' // Assuming WP format or adjusting to match your API expectations
+      })
+    });
+    
+    if (!response.ok) {
+      console.error("External API upload failed:", await response.text());
+    } else {
+      console.log("Successfully saved to external API");
+    }
+  } catch (err) {
+    console.error("Failed to call external API:", err);
+  }
+}
+
+// Admin API to delete history from External Source
+app.delete("/api/admin/history/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const response = await fetch(`${EXTERNAL_API_BASE}/delete/${id}`, {
+      method: "DELETE"
+    });
+    if (!response.ok) throw new Error("Failed to delete from external API");
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin API to fetch history from External Source
+app.get("/api/admin/history", async (req, res) => {
+  try {
+    const response = await fetch(`${EXTERNAL_API_BASE}/files`);
+    if (!response.ok) throw new Error("Failed to fetch from external API");
+    const data = await response.json();
+    
+    // Map external data format to dashboard format if necessary
+    const history = (Array.isArray(data) ? data : []).map((item: any) => {
+      let content = {};
+      try {
+        content = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+      } catch (e) {}
+      
+      return {
+        id: item.id,
+        createdAt: item.date || new Date().toISOString(),
+        fileName: item.title?.rendered || item.title || "Unknown",
+        ...(typeof content === 'object' ? content : {})
+      };
+    });
+    
+    res.json(history);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API Routes
 app.post("/api/analyze", upload.single("resume"), async (req, res) => {
   try {
-    const { text, pdfBase64, jobDescription, engine = "gemini", userApiKey } = req.body;
+    const { text, pdfBase64, jobDescription, engine = "gemini", userApiKey, uid, domain, fileName } = req.body;
     let resumeContent = "";
     let resumeBuffer: Buffer | null = null;
 
@@ -183,6 +271,8 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
     } else {
       return res.status(400).json({ error: "No resume content provided. Please upload a PDF." });
     }
+
+    let result: any = null;
 
     if (engine === "openai") {
       const apiKey = userApiKey || process.env.OPENAI_API_KEY;
@@ -210,9 +300,8 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
 
       const resultText = completion.choices[0].message.content;
       if (!resultText) throw new Error("No response from OpenAI");
-      const result = JSON.parse(resultText);
+      result = JSON.parse(resultText);
       result.engine = "openai";
-      return res.json(result);
     } else if (engine === "claude") {
       const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
       if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
@@ -240,13 +329,11 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
       const resultText = msg.content[0].type === 'text' ? msg.content[0].text : '';
       if (!resultText) throw new Error("No response from Claude");
       
-      // Claude might wrap JSON in markdown blocks
       const jsonMatch = resultText.match(/\{[\s\S]*\}/);
       const cleanedJson = jsonMatch ? jsonMatch[0] : resultText;
       
-      const result = JSON.parse(cleanedJson);
+      result = JSON.parse(cleanedJson);
       result.engine = "claude";
-      return res.json(result);
     } else {
       // Gemini Path
       const apiKey = userApiKey || process.env.GEMINI_API_KEY;
@@ -288,8 +375,25 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
 
       const resultText = aiResponse.text;
       if (!resultText) throw new Error("No response from AI");
-      return res.json(JSON.parse(resultText));
+      result = JSON.parse(resultText);
+      result.engine = "gemini";
     }
+
+    // Save to External API automatically as "One API" call
+    if (uid) {
+      await saveToExternalApi({
+        uid,
+        domain,
+        resumeText: resumeContent,
+        jobDescription: jobDescription || "",
+        fileName: fileName || "",
+        result
+      });
+    }
+
+    result.resumeText = resumeContent;
+    result.jobDescription = jobDescription || "";
+    return res.json(result);
   } catch (err: any) {
     console.error("Analysis error:", err);
     res.status(500).json({ error: err.message || "Internal server error" });

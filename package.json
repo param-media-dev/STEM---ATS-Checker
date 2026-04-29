@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "start": "node server.ts",
     "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
@@ -11,6 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
@@ -19,6 +21,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^12.10.0",
+    "firebase-admin": "^13.8.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.35.0",
     "multer": "^1.4.5-lts.1",

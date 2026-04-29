@@ -178,57 +178,28 @@ export interface ATSResult {
 
 export async function analyzeResume(
   resumeSource: { text?: string; pdfBase64?: string },
-  jobDescription?: string
+  jobDescription?: string,
+  extraData?: { uid?: string; domain?: string; fileName?: string }
 ): Promise<ATSResult> {
-  // Gemini Path (Frontend as per instructions)
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-
-  const genAI = new GoogleGenAI({ apiKey });
-  const model = "gemini-3-flash-preview";
-
-  const parts: any[] = [];
-
-  if (resumeSource.pdfBase64) {
-    parts.push({
-      inlineData: {
-        mimeType: "application/pdf",
-        data: resumeSource.pdfBase64,
-      },
-    });
-    parts.push({
-      text: "Analyze the attached resume PDF based on the STEM principles provided in your system instructions.",
-    });
-  } else if (resumeSource.text) {
-    parts.push({
-      text: `RESUME CONTENT:\n${resumeSource.text}`,
-    });
-  } else {
-    throw new Error("No resume content provided");
-  }
-
-  if (jobDescription) {
-    parts.push({
-      text: `JOB DESCRIPTION:\n${jobDescription}`,
-    });
-  } else {
-    parts.push({
-      text: "NO JOB DESCRIPTION PROVIDED. Evaluate resume independently.",
-    });
-  }
-
-  const response = await genAI.models.generateContent({
-    model,
-    contents: [{ role: "user", parts }],
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      temperature: 0,
+  const response = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      ...resumeSource,
+      jobDescription,
+      uid: extraData?.uid,
+      domain: extraData?.domain,
+      fileName: extraData?.fileName,
+      engine: 'gemini'
+    }),
   });
 
-  const text = response.text;
-  if (!text) throw new Error("No response from AI");
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Analysis failed with status ${response.status}`);
+  }
 
-  return JSON.parse(text) as ATSResult;
+  return await response.json();
 }

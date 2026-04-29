@@ -48,7 +48,7 @@ import { twMerge } from 'tailwind-merge';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { auth, db, signInWithGoogle, logout, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -84,7 +84,9 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [adminTab, setAdminTab] = useState<'users' | 'resumes'>('users');
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [candidatesList, setCandidatesList] = useState<any[]>([]);
   const [isAdminLoading, setIsAdminLoading] = useState(false);
 
   const [step, setStep] = useState<0 | 1 | 2>(0); // 0: Domain, 1: Upload, 2: Results
@@ -190,17 +192,38 @@ export default function App() {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchData = async () => {
     if (!isAdmin) return;
     setIsAdminLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, 'users'));
-      const users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsersList(users);
+      if (adminTab === 'users') {
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setUsersList(users);
+      } else {
+        const response = await fetch('/api/admin/history');
+        if (!response.ok) throw new Error('Failed to fetch history');
+        const candidates = await response.json();
+        setCandidatesList(candidates);
+      }
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      console.error('Failed to fetch admin data:', err);
     } finally {
       setIsAdminLoading(false);
+    }
+  };
+
+  const deleteCandidate = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this analysis?')) return;
+    try {
+      const response = await fetch(`/api/admin/history/${id}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) throw new Error('Failed to delete');
+      setCandidatesList(candidatesList.filter(c => c.id !== id));
+    } catch (err) {
+      console.error('Failed to delete candidate:', err);
+      alert('Failed to delete analysis');
     }
   };
 
@@ -231,9 +254,9 @@ export default function App() {
 
   useEffect(() => {
     if (showAdminDashboard) {
-      fetchUsers();
+      fetchData();
     }
-  }, [showAdminDashboard]);
+  }, [showAdminDashboard, adminTab]);
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -301,7 +324,11 @@ export default function App() {
 
         for (const jd of activeJDs) {
           try {
-            const result = await analyzeResume(resumeSource, jd);
+            const result = await analyzeResume(resumeSource, jd, {
+              uid: user?.uid,
+              domain: domain || 'General',
+              fileName: resume.name
+            });
             jdResults.push(result);
           } catch (err: any) {
             const errorMessage = err.message || '';
@@ -456,7 +483,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-3xl font-black text-gray-900 tracking-tight">Admin Dashboard</h2>
-                  <p className="text-gray-500">Manage user Pro subscriptions.</p>
+                  <p className="text-gray-500">Manage user subscriptions and view analyzed resumes.</p>
                 </div>
                 <button 
                   onClick={() => setShowAdminDashboard(false)}
@@ -466,11 +493,32 @@ export default function App() {
                 </button>
               </div>
 
+              <div className="flex space-x-2 border-b border-gray-200">
+                <button
+                  onClick={() => setAdminTab('users')}
+                  className={cn(
+                    "px-4 py-2 font-bold text-sm transition-colors border-b-2",
+                    adminTab === 'users' ? "border-brand-green text-brand-green" : "border-transparent text-gray-500 hover:text-gray-900"
+                  )}
+                >
+                  Users
+                </button>
+                <button
+                  onClick={() => setAdminTab('resumes')}
+                  className={cn(
+                    "px-4 py-2 font-bold text-sm transition-colors border-b-2",
+                    adminTab === 'resumes' ? "border-brand-green text-brand-green" : "border-transparent text-gray-500 hover:text-gray-900"
+                  )}
+                >
+                  Candidate History
+                </button>
+              </div>
+
               <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                  <h3 className="font-bold text-gray-900">User Management</h3>
+                  <h3 className="font-bold text-gray-900">{adminTab === 'users' ? 'User Management' : 'Recent Analyses'}</h3>
                   <button 
-                    onClick={fetchUsers}
+                    onClick={fetchData}
                     className="p-2 hover:bg-gray-200 rounded-lg transition-colors text-gray-500"
                     disabled={isAdminLoading}
                   >
@@ -478,68 +526,123 @@ export default function App() {
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50/50">
-                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">User</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Expires</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {usersList.map((u) => (
-                        <tr key={u.id} className="hover:bg-gray-50/30 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <img src={u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.displayName || 'User')}`} alt={u.displayName} className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
-                              <span className="text-sm font-bold text-gray-900">{u.displayName || 'Anonymous'}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
-                          <td className="px-6 py-4">
-                            {u.isPro ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-gold/10 text-brand-gold rounded-full text-[10px] font-black border border-brand-gold/20">
-                                <Crown size={10} /> PRO
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full text-[10px] font-black border border-gray-200">
-                                FREE
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {u.isPro && u.email !== 'paramatwork3076@gmail.com' ? (
-                              <input 
-                                type="date" 
-                                value={u.proUntil ? u.proUntil.split('T')[0] : ''} 
-                                onChange={(e) => updateUserProUntil(u.id, new Date(e.target.value).toISOString())}
-                                className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-brand-green outline-none"
-                              />
-                            ) : (
-                              <span className="text-xs text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            {u.email !== 'paramatwork3076@gmail.com' && (
-                              <button 
-                                onClick={() => toggleUserPro(u.id, u.isPro)}
-                                className={cn(
-                                  "px-4 py-1.5 rounded-xl text-xs font-bold transition-all border",
-                                  u.isPro 
-                                    ? "bg-red-50 text-red-600 border-red-100 hover:bg-red-100" 
-                                    : "bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green/20"
-                                )}
-                              >
-                                {u.isPro ? 'Downgrade' : 'Upgrade to Pro'}
-                              </button>
-                            )}
-                          </td>
+                  {adminTab === 'users' ? (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/50">
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">User</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Expires</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {usersList.map((u) => (
+                          <tr key={u.id} className="hover:bg-gray-50/30 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <img src={u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.displayName || 'User')}`} alt={u.displayName} className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
+                                <span className="text-sm font-bold text-gray-900">{u.displayName || 'Anonymous'}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
+                            <td className="px-6 py-4">
+                              {u.isPro ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-gold/10 text-brand-gold rounded-full text-[10px] font-black border border-brand-gold/20">
+                                  <Crown size={10} /> PRO
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full text-[10px] font-black border border-gray-200">
+                                  FREE
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {u.isPro && u.email !== 'paramatwork3076@gmail.com' ? (
+                                <input 
+                                  type="date" 
+                                  value={u.proUntil ? u.proUntil.split('T')[0] : ''} 
+                                  onChange={(e) => updateUserProUntil(u.id, new Date(e.target.value).toISOString())}
+                                  className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-brand-green outline-none"
+                                />
+                              ) : (
+                                <span className="text-xs text-gray-400">N/A</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {u.email !== 'paramatwork3076@gmail.com' && (
+                                <button 
+                                  onClick={() => toggleUserPro(u.id, u.isPro)}
+                                  className={cn(
+                                    "px-4 py-1.5 rounded-xl text-xs font-bold transition-all border",
+                                    u.isPro 
+                                      ? "bg-red-50 text-red-600 border-red-100 hover:bg-red-100" 
+                                      : "bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green/20"
+                                  )}
+                                >
+                                  {u.isPro ? 'Downgrade' : 'Upgrade to Pro'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/50">
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Resume</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Domain</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Score</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {candidatesList.length === 0 ? (
+                          <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 text-sm">No candidates analyzed yet.</td></tr>
+                        ) : candidatesList.map((c) => (
+                          <tr key={c.id} className="hover:bg-gray-50/30 transition-colors">
+                            <td className="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">
+                              {new Date(c.createdAt).toLocaleDateString()} {new Date(c.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-bold text-gray-900">{c.fileName || 'Direct Text Input'}</span>
+                              <div className="text-xs text-gray-400 truncate max-w-[200px]">{c.resumeText}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium">
+                                {c.domain}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-black text-gray-900">{c.result?.ats_score || 'N/A'}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right flex justify-end gap-2">
+                              <button
+                                className="p-2 bg-gray-50 hover:bg-brand-green/10 text-gray-400 hover:text-brand-green rounded-lg transition-colors inline-block"
+                                onClick={() => {
+                                  alert("JD:\n" + (c.jobDescription || 'N/A') + "\n\nResult:\n" + JSON.stringify(c.result, null, 2));
+                                }}
+                                title="View Raw Data"
+                              >
+                                <ExternalLink size={16} />
+                              </button>
+                              <button
+                                className="p-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors inline-block"
+                                onClick={() => deleteCandidate(c.id)}
+                                title="Delete Analysis"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             </motion.div>
